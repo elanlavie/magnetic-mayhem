@@ -572,8 +572,33 @@ def library_import(db, user, text, title, ask):
     text = str(text or '')[:40000]
     if not text.strip():
         raise AuthError('Paste or upload the questions first.')
-    result = ask(LIB_PROMPT, {'material': text}, 10000)
-    questions = [q for q in map(_clean_question, (result or {}).get('questions') or []) if q][:60]
+    chunks, cur = [], ''
+    for para in text.split('\n'):
+        if len(cur) + len(para) > 5000 and cur:
+            chunks.append(cur)
+            cur = ''
+        cur += para + '\n'
+    if cur.strip():
+        chunks.append(cur)
+    chunks = chunks[:8]
+    outs = [None] * len(chunks)
+
+    def work(k):
+        try:
+            outs[k] = ask(LIB_PROMPT + ' This is one part of a longer document; extract at most 15 questions from it.', {'material': chunks[k]}, 8000)
+        except Exception:
+            outs[k] = None
+    import threading
+    ths = [threading.Thread(target=work, args=(k,)) for k in range(len(chunks))]
+    for t in ths:
+        t.start()
+    for t in ths:
+        t.join(100)
+    parts = [o for o in outs if o]
+    if not parts and chunks:
+        raise AuthError('The AI took too long reading that file. Try a shorter file or paste part of it.')
+    result = {'title': (parts[0] or {}).get('title') if parts else None}
+    questions = [q for q in map(_clean_question, [x for o in parts for x in ((o or {}).get('questions') or [])]) if q][:60]
     if not questions:
         raise AuthError('No questions could be found in that material.')
     title = (str(title or '').strip() or str((result or {}).get('title') or 'Question set'))[:80]

@@ -261,3 +261,19 @@ class ChoiceTests(unittest.TestCase):
         self.assertGreater(game.think_seconds({'prompt':'x','level':'hard'}),game.think_seconds({'prompt':'x','level':'easy'}))
         p=game.trim_pack(copy.deepcopy(self.pack),2);self.assertEqual([len(t['questions']) for t in p['topics']],[1,1])
         self.assertEqual(sum(len(t['questions']) for t in game.trim_pack(copy.deepcopy(self.pack),99)['topics']),3)
+
+
+class GenerateTests(unittest.TestCase):
+    def test_generate_builds_topics_in_parallel_and_survives_a_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            game.DB=tmp+'/t.sqlite';game.ROOMS.clear();old=(game.KEY,game.TEACHER_KEY,game.ai);game.KEY='k';game.TEACHER_KEY='tk'
+            def fake(system,data,max_tokens=650,wait=None):
+                if 'topic' not in data: return {'title':'Circuits','topics':[{'name':'Ohm','icon':'⚡','focus':'f'},{'name':'Bad','icon':'x','focus':'f'}]}
+                if data['topic']=='Bad': raise game.GameError('boom')
+                return {'questions':[{'prompt':'Why?','answer':'Because.','hint':'h','choices':['a','b'],'correct':1,'level':'easy'}]}
+            game.ai=fake
+            try:
+                r=game.dispatch('/api/generate',{'text':'ohms law','teacherKey':'tk'})
+                self.assertEqual([t['name'] for t in r['pack']['topics']],['Ohm']);self.assertTrue(r['partial'])
+                self.assertEqual(r['pack']['topics'][0]['questions'][0]['correct'],1)
+            finally: game.KEY,game.TEACHER_KEY,game.ai=old
