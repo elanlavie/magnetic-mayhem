@@ -10,11 +10,8 @@ import time
 class SocialError(Exception):
     pass
 
-PANELS=[(800,650),(1340,650)]
 KILL_COOLDOWN=20
 KILL_PENALTY=2
-SABOTAGE_COOLDOWN=60
-SABOTAGE_DURATION=90
 MEETING_COOLDOWN=30
 MAX_SHIELDS=2
 
@@ -25,8 +22,8 @@ def configure(room,options):
                   'discussionSeconds':max(15,min(180,int(options.get('discussionSeconds',30)))),
                   'voteSeconds':max(15,min(300,int(options.get('voteSeconds',90)))),
                   'questionsPerTag':1,
-                  'writtenDiscussion':bool(options.get('writtenDiscussion',False)),'winner':None,'reason':'','meeting':None,'sabotage':None,'bodies':[],
-                  'lastMeeting':None,'nextMeetingAt':0,'nextSabotageAt':0}
+                  'writtenDiscussion':bool(options.get('writtenDiscussion',False)),'winner':None,'reason':'','meeting':None,'bodies':[],
+                  'lastMeeting':None,'nextMeetingAt':0}
 
 MIN_PLAYERS=4
 TAGS_PER_CHAT=2
@@ -51,16 +48,16 @@ def start(room):
     human=next((p['id'] for p in room['players'].values() if not p.get('bot')),None)
     if preferred=='impostor':impostors={human}
     elif preferred=='crew':impostors={secrets.choice([p['id'] for p in room['players'].values() if p.get('bot')])}
-    now=time.time();g.update(startedAt=now,penalty=0,tagCount=0,meetingCount=0,sabotageCount=0,summary=None,phase='playing',round=g['round']+1,winner=None,reason='',meeting=None,sabotage=None,bodies=[],lastMeeting=None,nextMeetingAt=now+MEETING_COOLDOWN,nextSabotageAt=now+20,roundEndsAt=now+g['roundSeconds'] if g['roundSeconds'] else 0)
+    now=time.time();g.update(startedAt=now,penalty=0,tagCount=0,meetingCount=0,summary=None,phase='playing',round=g['round']+1,winner=None,reason='',meeting=None,bodies=[],lastMeeting=None,nextMeetingAt=now+MEETING_COOLDOWN,roundEndsAt=now+g['roundSeconds'] if g['roundSeconds'] else 0)
     for p in room['players'].values():
         park(p)
         p.update(role='impostor' if p['id'] in impostors else 'crew',alive=True,emergencies=1,
                  roundTasks=[f'{i}:{secrets.randbelow(len(t["questions"]))}' for i,t in enumerate(room['pack']['topics'])],
                  roundDone=[],killReadyAt=now+KILL_COOLDOWN,socialRound=g['round'],conversations={},x=800,y=460,botPath=[],botTarget=None,botWaitingUntil=0,botSuspect=None,
-                 tagCharge=0,shield=0,notices=[],botChargeAt=0,stats={'tags':0,'answers':0,'distance':0.0,'goodVotes':0,'votes':0,'fixes':0},safeUntil=0,blockedTopic=None,blockedUntil=0)
+                 tagCharge=0,shield=0,notices=[],botChargeAt=0,stats={'tags':0,'answers':0,'distance':0.0,'goodVotes':0,'votes':0,'calls':0},safeUntil=0,blockedTopic=None,blockedUntil=0)
     return g
 
-BOARDS=[('tags','🏷️ Most tags','tags'),('answers','🧠 Most questions answered','answers'),('distance','👟 Furthest traveled','steps'),('goodVotes','🕵️ Best detective (accurate votes)','correct votes'),('fixes','🛠️ Reactor fixer','fixes')]
+BOARDS=[('tags','🏷️ Most tags','tags'),('answers','🧠 Most questions answered','answers'),('distance','👟 Furthest traveled','steps'),('goodVotes','🕵️ Best detective (accurate votes)','correct votes'),('calls','🚨 Meeting caller','meetings called')]
 
 def summarize(room):
     g=room['game'];humans=[p for p in room['players'].values() if not p.get('bot') and p.get('stats')]
@@ -71,10 +68,10 @@ def summarize(room):
         rows=sorted([r for r in rows if r[2]>0],key=lambda r:-r[2])[:3]
         boards.append({'key':key,'title':title,'unit':unit,'entries':[{'id':i,'name':n,'value':v} for n,i,v in rows]})
     stats={p['id']:{**p['stats'],'distance':round(p['stats'].get('distance',0)/40)} for p in humans}
-    return {'seconds':round(time.time()-g.get('startedAt',time.time())),'tags':g.get('tagCount',0),'meetings':g.get('meetingCount',0),'sabotages':g.get('sabotageCount',0),'boards':boards,'stats':stats}
+    return {'seconds':round(time.time()-g.get('startedAt',time.time())),'tags':g.get('tagCount',0),'meetings':g.get('meetingCount',0),'boards':boards,'stats':stats}
 
 def finish(room,winner,reason):
-    g=room['game'];g.update(phase='ended',winner=winner,reason=reason,meeting=None,sabotage=None)
+    g=room['game'];g.update(phase='ended',winner=winner,reason=reason,meeting=None)
     try:g['summary']=summarize(room)
     except Exception:g['summary']=None
 
@@ -98,9 +95,8 @@ def victory(room):
 
 def shift_clocks(room,seconds):
     g=room['game']
-    for k in ('nextMeetingAt','nextSabotageAt','roundEndsAt'):
+    for k in ('nextMeetingAt','roundEndsAt'):
         if g.get(k):g[k]+=seconds
-    if g.get('sabotage'):g['sabotage']['deadline']+=seconds
     if g.get('meeting'):
         for k in ('started','voteOpensAt','endsAt'):g['meeting'][k]+=seconds
     for p in room['players'].values():
@@ -121,7 +117,6 @@ def resolve_meeting(room):
     name=room['players'][ejected]['name'] if ejected else None
     g['lastMeeting']={'id':m['id'],'ejected':ejected,'name':name,'tally':tally,
                       'message':f'{name} was voted out and can keep learning as a ghost. 👻' if ejected else 'No one was voted out. Ties and skip votes keep everyone aboard. 🛰️'}
-    if g.get('sabotage'):g['sabotage']['deadline']+=time.time()-m['started']
     if g.get('roundEndsAt'):g['roundEndsAt']+=time.time()-m['started']
     g.update(phase='playing',meeting=None,bodies=[],nextMeetingAt=time.time()+MEETING_COOLDOWN)
     for p in room['players'].values():p.update(x=800,y=460,killReadyAt=time.time()+KILL_COOLDOWN,botPath=[],botTarget=None)
@@ -136,8 +131,6 @@ def advance(room):
         m=g['meeting'];living=[p for p in room['players'].values() if p.get('alive',True)]
         if now>=m['endsAt'] or (now>=m['voteOpensAt'] and all(p['id'] in m['votes'] for p in living)):
             resolve_meeting(room);changed=True
-    if g['phase']=='playing' and g.get('sabotage') and now>=g['sabotage']['deadline']:
-        finish(room,'impostors','The reactor overload was not stabilized in time. ⚠️');changed=True
     before=g['phase'];victory(room)
     return changed or before!=g['phase']
 
@@ -232,22 +225,10 @@ def action(room,player,data,walls):
         if not body or not near(player,body,115,walls):raise SocialError('Move near a downed explorer to report them.')
         meeting(room,player,f'{player["name"]} reported {body["name"]}. Share what you saw.')
     elif kind=='emergency':
-        if g.get('sabotage'):raise SocialError('Stabilize the reactor before calling an emergency meeting. Reports still work.')
         if now<g['nextMeetingAt']:raise SocialError('Emergency meetings are on cooldown.')
         if not player.get('emergencies',0):raise SocialError('You already used your emergency meeting this round.')
         if math.dist((player['x'],player['y']),(800,460))>125:raise SocialError('Return to the arrival pad to call an emergency meeting.')
-        player['emergencies']-=1;meeting(room,player,'Emergency meeting. Discuss observations, then vote privately.')
-    elif kind=='sabotage':
-        if player.get('role')!='impostor':raise SocialError('Only impostors can sabotage the station.')
-        if g.get('sabotage') or now<g['nextSabotageAt']:raise SocialError('Sabotage is on cooldown.')
-        g['sabotageCount']=g.get('sabotageCount',0)+1;g['sabotage']={'deadline':now+SABOTAGE_DURATION,'fixed':[]};g['nextSabotageAt']=now+SABOTAGE_DURATION+SABOTAGE_COOLDOWN
-    elif kind=='stabilize':
-        sabotage=g.get('sabotage');panel=int(data.get('panel',-1))
-        if not sabotage or panel not in range(len(PANELS)):raise SocialError('No reactor panel needs attention.')
-        if math.dist((player['x'],player['y']),PANELS[panel])>125:raise SocialError('Move closer to the glowing reactor panel.')
-        if panel not in sabotage['fixed']:
-            sabotage['fixed'].append(panel);player.get('stats',{})['fixes']=player.get('stats',{}).get('fixes',0)+1
-        if len(sabotage['fixed'])==len(PANELS):g['sabotage']=None;g['nextSabotageAt']=now+SABOTAGE_COOLDOWN
+        player['emergencies']-=1;player.get('stats',{})['calls']=player.get('stats',{}).get('calls',0)+1;meeting(room,player,'Emergency meeting. Discuss observations, then vote privately.')
     else:raise SocialError('Unknown round action.')
 
 def next_question(room,player,topic):
@@ -264,10 +245,9 @@ def record_task(room,player,qid):
 
 def public(room):
     g=room['game'];now=time.time();done,total=task_counts(room)
-    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','lastMeeting','nextMeetingAt','nextSabotageAt','writtenDiscussion','questionsPerTag','roundSeconds','crewTargetPct','roundEndsAt')}
+    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','lastMeeting','nextMeetingAt','writtenDiscussion','questionsPerTag','roundSeconds','crewTargetPct','roundEndsAt')}
     result['summary']=g.get('summary') if g['phase']=='ended' else None;result['crewPenalty']=g.get('penalty',0)
     result.update(botPractice=bool(room.get('botPractice')),serverNow=now,crewTasksDone=done,crewTasksTotal=total,crewTasksTarget=target_for(room,total) if total else 0,minimumPlayers=MIN_PLAYERS,impostorsIfStartedNow=impostors_for(len(room['players'])))
-    result['sabotage']=g['sabotage']
     m=g.get('meeting');result['meeting']=None
     if m:
         result['meeting']={k:m[k] for k in ('id','caller','reason','started','voteOpensAt','endsAt')}
@@ -353,14 +333,6 @@ def bot_tick(room):
                     else:bot_walk(p,(t['x'],t['y']),dt)
                     if g['phase']!='playing':break
                     continue
-            if now>=g.get('nextSabotageAt',0) and not g.get('sabotage'):
-                action(room,p,{'action':'sabotage'},BOT_WALLS);changed=True
-        if g.get('sabotage') and p.get('alive',True) and p.get('role')!='impostor':
-            remaining=[i for i in range(len(PANELS)) if i not in g['sabotage']['fixed']]
-            if remaining:
-                i=min(remaining,key=lambda i:math.dist((p['x'],p['y']),PANELS[i]))
-                if math.dist((p['x'],p['y']),PANELS[i])<=100:action(room,p,{'action':'stabilize','panel':i},BOT_WALLS);changed=True
-                else:bot_walk(p,PANELS[i],dt)
             continue
         bodies=[b for b in g.get('bodies',[]) if p.get('alive',True) and p.get('role')=='crew' and near(p,b,115,BOT_WALLS)]
         if bodies:meeting(room,p,f'{p["name"]} reported {bodies[0]["name"]}. Discuss the evidence.');changed=True;break
