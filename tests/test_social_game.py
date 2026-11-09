@@ -33,11 +33,11 @@ class SocialTests(unittest.TestCase):
             with self.assertRaises(game.GameError):self.act(self.crew[0],action,target=self.crew[1]['id'])
     def test_tag_cooldown_distance_and_wall_validation(self):
         with self.assertRaises(game.GameError):self.act(self.imp,'tag',target=self.crew[0]['id'])
-        self.imp['killReadyAt']=0;self.crew[0].update(x=1300,y=240)
+        self.imp['killReadyAt']=0;self.imp['tagCharge']=2;self.crew[0].update(x=1300,y=240)
         with self.assertRaises(game.GameError):self.act(self.imp,'tag',target=self.crew[0]['id'])
         self.imp.update(x=650,y=310);self.crew[0].update(x=650,y=360)
         with self.assertRaises(game.GameError):self.act(self.imp,'tag',target=self.crew[0]['id'])
-        self.imp.update(x=800,y=460);self.crew[0].update(x=830,y=460);self.act(self.imp,'tag',target=self.crew[0]['id'])
+        self.imp.update(x=800,y=460,tagCharge=2);self.crew[0].update(x=830,y=460);self.act(self.imp,'tag',target=self.crew[0]['id'])
         self.assertFalse(self.crew[0]['alive']);self.assertEqual(len(self.g['bodies']),1)
         with self.assertRaises(game.GameError):self.act(self.imp,'tag',target=self.crew[1]['id'])
     def test_ghost_keeps_learning_but_cannot_intervene(self):
@@ -64,7 +64,7 @@ class SocialTests(unittest.TestCase):
     def test_meeting_discussion_timer_prevents_early_voting(self):
         self.g['nextMeetingAt']=0;self.act(self.crew[0],'emergency');m=self.g['meeting']
         with self.assertRaises(game.GameError):self.act(self.crew[0],'vote',meeting=m['id'],target='skip')
-        with self.assertRaises(game.GameError):game.dispatch('/api/move',{**self.auth[self.crew[1]['id']],'x':810,'y':460})
+        self.assertTrue(game.dispatch('/api/move',{**self.auth[self.crew[1]['id']],'x':810,'y':460})['ok'])  # meetings never freeze movement
     def test_sabotage_repair_and_expiry(self):
         self.g['nextSabotageAt']=0;self.act(self.imp,'sabotage')
         self.crew[0].update(x=800,y=650);self.act(self.crew[0],'stabilize',panel=0)
@@ -72,7 +72,7 @@ class SocialTests(unittest.TestCase):
         self.crew[1].update(x=1340,y=650);self.act(self.crew[1],'stabilize',panel=1);self.assertIsNone(self.g['sabotage'])
         self.g['nextSabotageAt']=0;self.act(self.imp,'sabotage');self.g['sabotage']['deadline']=time.time()-1;game.dispatch('/api/state',self.auth[self.crew[0]['id']]);self.assertEqual(self.g['winner'],'impostors')
     def test_parity_wins_and_tagged_players_are_hidden(self):
-        for victim in self.crew[:2]:self.imp['killReadyAt']=0;self.act(self.imp,'tag',target=victim['id'])
+        for victim in self.crew[:2]:self.imp['killReadyAt']=0;self.imp['tagCharge']=2;self.act(self.imp,'tag',target=victim['id'])
         self.assertEqual(self.g['winner'],'impostors')
         public=game.room_public(self.room);self.assertTrue(all(p['x'] is None for p in public['players'] if not p['alive']))
     def test_all_tasks_include_ghost_tasks_for_victory(self):
@@ -80,10 +80,40 @@ class SocialTests(unittest.TestCase):
         for p in self.crew:
             for qid in p['roundTasks']:social.record_task(self.room,p,qid)
         self.assertEqual(self.g['winner'],'crew')
-    def test_meeting_parks_chat_and_pause_shifts_deadlines(self):
+    def test_meeting_does_not_interrupt_chat_and_vote_waits_for_chat_end(self):
         p=self.crew[1];i=int(p['roundTasks'][0].split(':')[0]);p.update(x=game.POSITIONS[i][0],y=game.POSITIONS[i][1]);game.dispatch('/api/start',{**self.auth[p['id']],'topic':i})
-        self.open_meeting();self.assertIsNone(p['active']);self.assertTrue(p['conversations'])
+        m=self.open_meeting();self.assertIsNotNone(p['active'])
+        with self.assertRaises(game.GameError):self.act(p,'vote',meeting=m,target='skip')
+        game.dispatch('/api/leave',self.auth[p['id']]);self.act(p,'vote',meeting=m,target='skip');self.assertEqual(self.g['meeting']['votes'][p['id']],'skip')
         game.dispatch('/api/host',{**self.host,'action':'pause'});self.g['pausedAt']-=20;old=self.g['meeting']['endsAt'];game.dispatch('/api/host',{**self.host,'action':'pause'});self.assertGreaterEqual(self.g['meeting']['endsAt'],old+19)
+    def finish_chat(self,p,topic=None):
+        """Complete one real conversation (Sonnet mocked) and return the question id."""
+        qid=next(q for q in p['roundTasks'] if q not in p.get('roundDone',[])) if topic is None else None
+        i=int(qid.split(':')[0]) if qid else topic;p.update(x=game.POSITIONS[i][0],y=game.POSITIONS[i][1])
+        a=game.dispatch('/api/start',{**self.auth[p['id']],'topic':i})['player']['active']
+        with patch.object(game,'ai',return_value={'status':'correct','feedback':'Good Energy! ⚡'}):game.dispatch('/api/chat',{**self.auth[p['id']],'challenge':a['id'],'requestId':str(uuid.uuid4()),'text':'My explanation'})
+        game.dispatch('/api/leave',self.auth[p['id']])  # closing the chat, as the UI does
+        return f"{a['topic']}:{a['index']}"
+    def test_impostor_must_finish_conversations_before_tagging(self):
+        self.imp.update(killReadyAt=0,x=800,y=460);self.crew[0].update(x=830,y=460)
+        with self.assertRaises(game.GameError):self.act(self.imp,'tag',target=self.crew[0]['id'])
+        self.finish_chat(self.imp)
+        with self.assertRaises(game.GameError):self.act(self.imp,'tag',target=self.crew[0]['id'])  # needs 2 by default
+        self.finish_chat(self.imp);self.assertEqual(self.imp['tagCharge'],2)
+        self.imp.update(x=800,y=460);self.act(self.imp,'tag',target=self.crew[0]['id']);self.assertFalse(self.crew[0]['alive']);self.assertEqual(self.imp['tagCharge'],0)
+    def test_extra_chat_after_tasks_earns_shield_that_blocks_one_tag(self):
+        c=self.crew[0];c['roundDone']=list(c['roundTasks']);before=social.task_counts(self.room)
+        self.finish_chat(c,topic=int(c['roundTasks'][0].split(':')[0]));self.assertEqual(c['shield'],1);self.assertEqual(social.task_counts(self.room),before)
+        self.imp.update(killReadyAt=0,tagCharge=2,x=800,y=460);c.update(x=830,y=460)
+        self.act(self.imp,'tag',target=c['id']);self.assertTrue(c['alive']);self.assertEqual(c['shield'],0);self.assertEqual(self.g['bodies'],[])
+        self.assertTrue(any('shield' in n['text'].lower() for n in c['notices']));self.assertTrue(any('blocked' in n['text'] for n in self.imp['notices']))
+        self.assertEqual(self.imp['tagCharge'],0);self.assertTrue(self.imp['killReadyAt']>time.time())
+        self.assertNotIn('notices',json.dumps(game.room_public(self.room)))
+    def test_assigned_chats_give_no_shield_and_shields_cap_at_two(self):
+        c=self.crew[0];self.finish_chat(c);self.assertEqual(c.get('shield',0),0)
+        c['roundDone']=list(c['roundTasks'])
+        for _ in range(4):self.finish_chat(c,topic=int(c['roundTasks'][0].split(':')[0]))
+        self.assertEqual(c['shield'],2)
     def test_written_discussion_is_teacher_option_with_rate_limit(self):
         m=self.open_meeting()
         with self.assertRaises(game.GameError):self.act(self.crew[0],'discuss',meeting=m,text='I saw something')

@@ -53,13 +53,24 @@ end or restart rounds. Teacher-only role spoilers should stay off the projector.
 - Impostors have real science conversations as cover, but their practice does not
   advance the crew task bar. They win by reaching parity with the living crew or
   by letting a reactor sabotage expire.
-- Impostors can tag nearby crewmates with clear line of sight. A 30-second cooldown
-  applies at round start, after a tag, and after meetings. Tags are non-graphic.
+- Impostors can tag nearby crewmates with clear line of sight, but each tag must be
+  powered up by finishing real science conversations (default 2, teacher-adjustable
+  from 1 to 5; every correct conversation counts, including repeats). A 30-second
+  cooldown also applies at round start, after a tag, and after meetings. Tags are
+  non-graphic. Solo bot impostors simulate this by "studying" before they tag.
+- **Shields:** once a crewmate has finished their assigned tasks, each extra correct
+  conversation earns a shield (maximum 2). A shield blocks one tag attempt: the
+  crewmate is told someone nearby tried to tag them, the impostor is told the tag was
+  blocked (and gets a shorter cooldown), and nobody is eliminated. Shield counts are
+  private. Extra conversations never advance the crew task bar.
 - Living players can report nearby downed explorers. Each living player also gets
   one emergency meeting, called at the arrival pad, with a shared cooldown.
-- Meetings default to **30 seconds spoken classroom discussion**, then **30 seconds
-  private voting**. Teachers can change both durations and optionally enable written
-  in-game discussion. Ghosts observe without speaking in written chat or voting.
+- **Meetings never interrupt a conversation.** Reports and emergency meetings open a
+  non-blocking meeting: students keep chatting and moving, a banner shows the time
+  left, and the ballot appears when a student finishes or leaves their current chat
+  (they can also choose "Vote later"). Voting is rejected mid-chat. The defaults are a
+  **30 second discussion period** (before ballots open) and a **90 second voting
+  window**; teachers can change both and optionally enable written in-game discussion. Ghosts observe without speaking in written chat or voting.
   Ties, skip votes, and missing ballots do not force an ejection. Ballots are locked
   after submission. Individual choices stay private during the meeting; aggregate
   tallies appear afterward. Roles remain secret until the round ends.
@@ -94,4 +105,4 @@ SQLite stores rooms, conversations, progress, and relay records. Only files on t
 
 Run `python3 -m unittest discover -s tests -v` and `node tests/client-smoke.cjs`.
 
-The 52-test backend suite covers hidden roles, private ballots, bot navigation, classroom and written meetings, tags, sabotage, ghost learning, restart recovery, plus always-on AI (including legacy rooms), provider failure without fallback, scoring, retries, concurrent replies while leaving, saved conversations, assigned names, relay validation and rewards, restart recovery, and multiplayer rules. Client checks cover onboarding, Enter / Shift+Enter / IME input, automatic countdowns, Escape, backdrop dismissal, and saved drafts. Chrome verification additionally exercises actual controls and rendering; the local UI fixture is separate from the production build. Real Sonnet integration is verified on the deployed service.
+The 58-test backend suite covers hidden roles, private ballots, bot navigation, classroom and written meetings, tags, sabotage, ghost learning, restart recovery, plus always-on AI (including legacy rooms), provider failure without fallback, scoring, retries, concurrent replies while leaving, saved conversations, assigned names, relay validation and rewards, restart recovery, and multiplayer rules. Client checks cover onboarding, Enter / Shift+Enter / IME input, automatic countdowns, Escape, backdrop dismissal, and saved drafts. Chrome verification additionally exercises actual controls and rendering; the local UI fixture is separate from the production build. Real Sonnet integration is verified on the deployed service.
