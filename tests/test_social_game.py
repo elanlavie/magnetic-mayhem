@@ -102,6 +102,12 @@ class SocialTests(unittest.TestCase):
         for a in ids[:3]:game.dispatch('/api/round',{**a,'action':'ready'})
         self.assertEqual(g['phase'],'briefing');self.assertEqual((social.public(r)['briefReady'],social.public(r)['briefHumans']),(3,4))
         game.dispatch('/api/round',{**ids[3],'action':'ready'});self.assertEqual(g['phase'],'playing')
+    def test_bots_never_report_bodies_only_the_schedule_calls_meetings(self):
+        h=game.dispatch('/api/create',{'mode':'impostorSolo','soloRole':'crew'});j=game.dispatch('/api/join',{'code':h['code'],'name':'Human'});r=game.ROOMS[h['code']];g=r['game'];social.begin_play(r)
+        bot=next(p for p in r['players'].values() if p.get('bot') and p['role']=='crew')
+        g['bodies'].append({'id':'x','name':'Ghost','x':bot['x'],'y':bot['y']})
+        for _ in range(5):g['lastBotAt']=time.time()-1;social.advance(r)
+        self.assertEqual(g['phase'],'playing');self.assertEqual(g['meetingCount'],0)
     def test_meeting_frequency_is_a_teacher_option(self):
         self.assertEqual(self.g['meetingSeconds'],240)
         h=game.dispatch('/api/create',{'mode':'infiltration','teacherKey':'teacher-test','meetingSeconds':120});self.assertEqual(game.ROOMS[h['code']]['game']['meetingSeconds'],120)
