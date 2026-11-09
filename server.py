@@ -172,18 +172,25 @@ def room_public(r):
         if r.get('game') and not item['alive']:item['x']=item['y']=None
         players.append(item)
     teams={team:sorted({i for member in r['players'].values() if member['team']==team for i in member['repairs']}) for team in ('crew','mint','violet')}
-    result={'winner':r.get('winner'),'teamRepairs':teams,'code':r['code'],'mode':r['mode'],'gameType':r.get('gameType',game_types.DEFAULT),'pack':public_pack(r['pack']),'players':players,'paused':r['paused'],'closed':r.get('closed',False),'ai':True,'tutorModel':MODEL,'autoNames':r.get('autoNames',False),'first':r['first'],'followup':min(30,r['followup']),'created':r['created'],'allowStudy':r.get('allowStudy',False)}
+    cell_pool(r);result={'cells':list(r['cellPool']['active']),'winner':r.get('winner'),'teamRepairs':teams,'code':r['code'],'mode':r['mode'],'gameType':r.get('gameType',game_types.DEFAULT),'pack':public_pack(r['pack']),'players':players,'paused':r['paused'],'closed':r.get('closed',False),'ai':True,'tutorModel':MODEL,'autoNames':r.get('autoNames',False),'first':r['first'],'followup':min(30,r['followup']),'created':r['created'],'allowStudy':r.get('allowStudy',False)}
     if r.get('game'):result['game']=social.public(r)
     return result
 
-CELL_RESPAWN=90
-def cell_refresh(p):
-    now=time.time();at=p.setdefault('cellAt',{})
-    p['studied']=[c for c in p.get('studied',[]) if now-at.get(str(c),0)<CELL_RESPAWN]
-    for k in [k for k in at if int(k) not in p['studied']]: at.pop(k,None)
+CELL_RESPAWN=45
+CELLS_PER_PLAYER=0.75
+def cell_pool(r):
+    """Shared ⚡ cells on the map: about three for every four players, so they stay scarce. A collected cell reappears elsewhere after a while."""
+    now=time.time();pool=r.setdefault('cellPool',{'active':[],'respawn':[]});spots=len(cell_positions())
+    target=min(spots,max(3,math.ceil(len(r['players'])*CELLS_PER_PLAYER)))
+    due=[t for t in pool['respawn'] if t<=now];pool['respawn']=[t for t in pool['respawn'] if t>now]
+    def add():
+        free=[i for i in range(spots) if i not in pool['active']]
+        if free and len(pool['active'])<target:pool['active'].append(secrets.choice(free))
+    for _ in due:add()
+    for _ in range(max(0,target-len(pool['active'])-len(pool['respawn']))):add()
+    return pool['active']
 
 def private_player(p):
-    cell_refresh(p)
     return {k:v for k,v in p.items() if k not in ('token','cache','cellAt')}
 
 def get(rq):
@@ -341,7 +348,7 @@ def dispatch(path,d):
             else:name=explorer_name(r) if r.get('autoNames') else (str(d.get('name','Explorer')).strip()[:24] or 'Explorer')
             pid=secrets.token_hex(6); token=secrets.token_urlsafe(24)
             team='crew' if r['mode']!='race' else ('violet' if sum(x['team']=='violet' for x in r['players'].values())<=sum(x['team']=='mint' for x in r['players'].values()) else 'mint')
-            p={'id':pid,'token':token,'name':name,'team':team,'x':800,'y':460,'completed':[],'score':0,'cells':0,'repairs':[],'last':time.time(),'active':None,'history':[],'cache':{},'studied':[],'conversations':{},'relay':None,'relayRecords':{}}
+            p={'id':pid,'token':token,'name':name,'team':team,'x':800,'y':460,'completed':[],'score':0,'cells':2,'repairs':[],'last':time.time(),'active':None,'history':[],'cache':{},'studied':[],'conversations':{},'relay':None,'relayRecords':{}}
             if identity:p['email']=identity['email'];p['realName']=identity['name']
             r['players'][pid]=p
             if r.get('botPractice'):
@@ -454,13 +461,11 @@ def dispatch(path,d):
                 if len(shared)==len(r['pack']['topics']): r['winner']=p['team']
             save(); return snapshot(r,p)
         if path=='/api/cell':
-            # Fixed cells can be collected once per explorer; no competition over scarce supplies.
-            cell=int(d.get('cell',-1)); cells=cell_positions()
-            if cell not in range(len(cells)) or cell in p.get('studied',[]): return {'ok':False}
+            cell=int(d.get('cell',-1)); cells=cell_positions(); active=cell_pool(r)
+            if cell not in range(len(cells)) or cell not in active: return {'ok':False}
             if math.dist([p['x'],p['y']],cells[cell])>50: return {'ok':False}
-            cell_refresh(p)
-            if cell in p['studied']: return {'ok':False}
-            p['studied'].append(cell); p.setdefault('cellAt',{})[str(cell)]=time.time(); p['cells']+=1; save(); return {'ok':True,'cells':p['cells']}
+            active.remove(cell); r['cellPool']['respawn'].append(time.time()+CELL_RESPAWN)
+            p['cells']+=1; save(); return {'ok':True,'cells':p['cells']}
         if path=='/api/moretime':
             a=p['active']
             if not a or a['id']!=d.get('challenge') or a['done']: raise GameError('There is no open question to extend.')
@@ -475,6 +480,7 @@ def dispatch(path,d):
         text=str(d.get('text','')).strip()[:3000]; kind=d.get('kind','answer')
         if not text and kind=='answer': raise GameError('Write an idea or ask for a hint.')
         q=resolve_question(copy.deepcopy(r['pack']['topics'][a['topic']]['questions'][a['index']]),a.get('vi',0))
+        if kind=='hint' and p['cells']<1: raise GameError('A hint costs 1 ⚡ cell. Collect one on the map, or finish a chat to earn one.')
         a['busy']=True; history=copy.deepcopy(a['messages']); repairing=a['repair'];chat_round=p.get('socialRound')
     mid=log_chat(r,p,a,'student',text if kind=='answer' else ('[asked for a hint]' if kind=='hint' else '[asked for the worked explanation]'))
     if kind=='answer':screen_chat(r,p,mid,accounts.screen(text))
@@ -485,6 +491,7 @@ def dispatch(path,d):
         log_chat(r,p,a,'tutor',result['feedback'][:3500])
         with LOCK:
             a['busy']=False; a['messages'].append({'role':'user','text':text if kind=='answer' else ('Hint, please.' if kind=='hint' else 'Show a worked explanation.')})
+            if kind=='hint': p['cells']=max(0,p['cells']-1)
             if kind=='solution': a['repair']=True
             elif result['status']=='incorrect':
                 if not a['repair']: a['attempts']+=1

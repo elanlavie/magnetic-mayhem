@@ -21,7 +21,7 @@ def configure(room,options):
                   'tasksPerCrew':max(1,min(7,int(options.get('tasksPerCrew',5)))),
                   'roundSeconds':(0 if not int(options.get('roundSeconds',0) or 0) else max(120,min(3600,int(options['roundSeconds'])))),'crewTargetPct':max(50,min(100,int(options.get('crewTargetPct',80)))),'roundEndsAt':0,
                   'meetingSeconds':(0 if int(options.get('meetingSeconds',240) or 0)==0 else max(60,min(900,int(options.get('meetingSeconds',240))))),
-                  'briefingSeconds':max(10,min(120,int(options.get('briefingSeconds',60) or 60))),'briefingEndsAt':0,
+                  'briefingSeconds':max(10,min(120,int(options.get('briefingSeconds',60) or 60))),'briefingEndsAt':0,'impostorsEjected':0,
                   'interruptChats':bool(options.get('interruptChats',True)),
                   'discussionSeconds':max(15,min(180,int(options.get('discussionSeconds',30)))),
                   'voteSeconds':max(15,min(300,int(options.get('voteSeconds',90)))),
@@ -52,13 +52,13 @@ def start(room):
     human=next((p['id'] for p in room['players'].values() if not p.get('bot')),None)
     if preferred=='impostor':impostors={human}
     elif preferred=='crew':impostors={secrets.choice([p['id'] for p in room['players'].values() if p.get('bot')])}
-    now=time.time();g.update(briefingEndsAt=now+g['briefingSeconds'],startedAt=now,penalty=0,tagCount=0,meetingCount=0,summary=None,phase='briefing',round=g['round']+1,winner=None,reason='',meeting=None,bodies=[],lastMeeting=None,nextMeetingAt=0,roundEndsAt=0)
+    now=time.time();g.update(impostorsEjected=0,briefingEndsAt=now+g['briefingSeconds'],startedAt=now,penalty=0,tagCount=0,meetingCount=0,summary=None,phase='briefing',round=g['round']+1,winner=None,reason='',meeting=None,bodies=[],lastMeeting=None,nextMeetingAt=0,roundEndsAt=0)
     for p in room['players'].values():
         park(p)
         p.update(role='impostor' if p['id'] in impostors else 'crew',alive=True,
                  roundTasks=[f'{i}:{secrets.randbelow(len(t["questions"]))}' for i,t in enumerate(room['pack']['topics'])],
                  roundDone=[],killReadyAt=now+KILL_COOLDOWN,socialRound=g['round'],conversations={},x=800,y=460,botPath=[],botTarget=None,botWaitingUntil=0,botSuspect=None,
-                 tagCharge=0,shield=0,notices=[],botChargeAt=0,stats={'tags':0,'answers':0,'distance':0.0,'goodVotes':0,'votes':0},safeUntil=0,blockedTopic=None,blockedUntil=0)
+                 briefReady=False,tagCharge=0,shield=0,notices=[],botChargeAt=0,stats={'tags':0,'answers':0,'distance':0.0,'goodVotes':0,'votes':0},safeUntil=0,blockedTopic=None,blockedUntil=0)
     return g
 
 BOARDS=[('tags','🏷️ Most tags','tags'),('answers','🧠 Most questions answered','answers'),('distance','👟 Furthest traveled','steps'),('goodVotes','🕵️ Best detective (accurate votes)','correct votes'),('votes','🗳️ Most suspects flagged','votes')]
@@ -130,8 +130,13 @@ def resolve_meeting(room):
         ejected=above+tied if len(above)+len(tied)<=MAX_EJECT else above  # a tie that would exceed the cap keeps everyone tied aboard
     for k in ejected:room['players'][k]['alive']=False
     names=[room['players'][k]['name'] for k in ejected]
-    g['lastMeeting']={'id':m['id'],'ejected':ejected,'names':names,'name':', '.join(names) or None,'tally':tally,'needed':needed,
-                      'message':(f'{", ".join(names)} {"was" if len(names)==1 else "were"} voted out and can keep learning as a ghost. 👻') if names else f'No one reached {needed} votes, so nobody was voted out. 🛰️'}
+    results=[{'name':room['players'][k]['name'],'wasImpostor':room['players'][k].get('role')=='impostor'} for k in ejected]
+    g['impostorsEjected']=g.get('impostorsEjected',0)+sum(1 for x in results if x['wasImpostor'])
+    left=max(0,g['impostorCount']-g['impostorsEjected'])
+    said=' '.join(f'{x["name"]} {"WAS an impostor! 🕵️" if x["wasImpostor"] else "was NOT an impostor. 🧑‍🚀"}' for x in results)
+    tail=f' {left} impostor{"" if left==1 else "s"} left.'
+    g['lastMeeting']={'id':m['id'],'ejected':ejected,'names':names,'name':', '.join(names) or None,'tally':tally,'needed':needed,'results':results,'impostorsLeft':left,'at':time.time(),
+                      'message':(f'{said}{tail} Voted-out players keep learning as ghosts. 👻') if names else f'Nobody reached {needed} votes, so nobody was voted out.{tail}'}
     if g.get('roundEndsAt'):g['roundEndsAt']+=time.time()-m['started']
     g.update(phase='playing',meeting=None,bodies=[],tagsSinceMeeting=0,nextMeetingAt=time.time()+g['meetingSeconds'] if g['meetingSeconds'] else 0)
     for p in room['players'].values():p.update(x=800,y=460,killReadyAt=time.time()+KILL_COOLDOWN,botPath=[],botTarget=None)
@@ -142,7 +147,9 @@ def advance(room):
     if not g or room.get('paused') or room.get('closed'):return False
     now=time.time();changed=bot_tick(room)
     if room['paused']:return changed
-    if g['phase']=='briefing' and now>=g.get('briefingEndsAt',0):begin_play(room);changed=True
+    if g['phase']=='briefing':
+        humans=[p for p in room['players'].values() if not p.get('bot')]
+        if now>=g.get('briefingEndsAt',0) or (humans and all(p.get('briefReady') for p in humans)):begin_play(room);changed=True
     if g['phase']=='meeting':
         m=g['meeting'];living=[p for p in room['players'].values() if p.get('alive',True)]
         if now>=m['endsAt'] or (now>=m['voteOpensAt'] and all(p['id'] in m['votes'] for p in living)):
@@ -206,6 +213,9 @@ def action(room,player,data,walls):
     if not player.get('bot'):advance(room)
     kind=data.get('action');now=time.time()
     if room.get('paused') or room.get('closed'):raise SocialError('The teacher has paused or closed this room.')
+    if kind=='ready':
+        if g['phase']=='briefing':player['briefReady']=True;advance(room)
+        return
     if kind=='discuss':
         if g['phase']!='meeting' or data.get('meeting')!=g['meeting']['id']:raise SocialError('This meeting has ended.')
         if not g.get('writtenDiscussion'):raise SocialError('This meeting uses spoken classroom discussion.')
@@ -267,8 +277,8 @@ def record_task(room,player,qid):
 
 def public(room):
     g=room['game'];now=time.time();done,total=task_counts(room)
-    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','lastMeeting','nextMeetingAt','meetingSeconds','interruptChats','briefingSeconds','briefingEndsAt','writtenDiscussion','questionsPerTag','roundSeconds','crewTargetPct','roundEndsAt')}
-    result['summary']=g.get('summary') if g['phase']=='ended' else None;result['crewPenalty']=g.get('penalty',0)
+    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','lastMeeting','nextMeetingAt','meetingSeconds','interruptChats','briefingSeconds','briefingEndsAt','impostorsEjected','writtenDiscussion','questionsPerTag','roundSeconds','crewTargetPct','roundEndsAt')}
+    result['summary']=g.get('summary') if g['phase']=='ended' else None;result['crewPenalty']=g.get('penalty',0);result['impostorsLeft']=max(0,g['impostorCount']-g.get('impostorsEjected',0));result['briefReady']=sum(1 for p in room['players'].values() if not p.get('bot') and p.get('briefReady'));result['briefHumans']=sum(1 for p in room['players'].values() if not p.get('bot'))
     result.update(botPractice=bool(room.get('botPractice')),serverNow=now,crewTasksDone=done,crewTasksTotal=total,crewTasksTarget=target_for(room,total) if total else 0,minimumPlayers=MIN_PLAYERS,impostorsIfStartedNow=impostors_for(len(room['players'])))
     m=g.get('meeting');result['meeting']=None
     if m:
