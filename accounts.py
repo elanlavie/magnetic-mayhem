@@ -530,6 +530,7 @@ LIB_PROMPT = ('You turn a teacher\'s assessment or study material into explain-y
               'Extract EVERY question, including multiple-choice ones, and rewrite each so the student must explain their reasoning about ONE situation instead of picking a letter '
               '(describe the options in the prompt only when needed, never reveal the answer). "subject" is a short topic tag such as Magnetism, Electricity, Forces, Energy; '
               'tag by what the question is really about. "answer" is a short correct reference explanation (correct source errors gently), "hint" is a nudge that does not give the answer. '
+              'Keep the original numbers and figures in the question. When a question is quantitative, also add "variants": 3 versions that change only the numbers (each with its own prompt, answer and hint). When a question refers to a figure (circuit, field lines, arrangement), add "diagram": a small simple SVG (viewBox 0 0 320 200, shapes, lines and text only, no scripts, links or images, under 3000 characters) drawn from the description, and give each variant a matching diagram; otherwise use an empty string. '
               'Keep reasonable length; no HTML; at most 60 questions.')
 
 
@@ -540,6 +541,19 @@ def _clean_question(q):
     out['subject'] = out['subject'][:40] or 'General'
     if not (out['prompt'] and out['answer'] and out['hint']):
         return None
+    dg = str(q.get('diagram') or '')
+    if dg:
+        out['diagram'] = dg[:8000]
+    variants = []
+    for v in (q.get('variants') or [])[:4]:
+        if isinstance(v, dict):
+            item = {k: re.sub(r'[<>]', '', str(v.get(k, '')).strip())[:1500] for k in ('prompt', 'answer', 'hint')}
+            if all(item.values()):
+                if v.get('diagram'):
+                    item['diagram'] = str(v['diagram'])[:8000]
+                variants.append(item)
+    if variants:
+        out['variants'] = variants
     return out
 
 
@@ -548,7 +562,7 @@ def library_import(db, user, text, title, ask):
     text = str(text or '')[:40000]
     if not text.strip():
         raise AuthError('Paste or upload the questions first.')
-    result = ask(LIB_PROMPT, {'material': text}, 7000)
+    result = ask(LIB_PROMPT, {'material': text}, 10000)
     questions = [q for q in map(_clean_question, (result or {}).get('questions') or []) if q][:60]
     if not questions:
         raise AuthError('No questions could be found in that material.')
@@ -589,11 +603,11 @@ def library_delete(db, user, lib_id):
     return {'ok': True}
 
 
-def library_pack(db, user, lib_ids, subjects, title=None, per_station=3):
+def library_pack(db, user, lib_ids, subjects, title=None, per_station=4):
     """Build a game pack from chosen sets and topic tags: one station per tag, up to 7 stations of 1 to 3 questions."""
     need_teacher(user)
     wanted = {str(s).lower() for s in (subjects or [])}
-    per_station = max(1, min(3, int(per_station or 3)))
+    per_station = max(1, min(6, int(per_station or 4)))
     groups = {}
     with tx(db) as c:
         for lib_id in (lib_ids or []):
@@ -607,7 +621,7 @@ def library_pack(db, user, lib_ids, subjects, title=None, per_station=3):
         raise AuthError('No questions match those topics.')
     icons = ['🧲', '⚡', '🔋', '🛰️', '🔧', '🌀', '💡']
     topics = [{'name': name, 'icon': icons[i % len(icons)],
-               'questions': [{k: q[k] for k in ('prompt', 'answer', 'hint')} for q in qs[:per_station]]}
+               'questions': [{k: q[k] for k in ('prompt', 'answer', 'hint', 'diagram', 'variants') if k in q} for q in qs[:per_station]]}
               for i, (name, qs) in enumerate(list(groups.items())[:7])]
     return {'title': (str(title or '').strip() or 'My question set')[:100], 'topics': topics}
 
@@ -664,5 +678,5 @@ def dispatch(db, path, d, ask=None):
     if path == '/api/library/delete':
         return library_delete(db, user, d.get('id'))
     if path == '/api/library/pack':
-        return {'pack': library_pack(db, user, d.get('ids'), d.get('subjects'), d.get('title'), d.get('perStation', 3))}
+        return {'pack': library_pack(db, user, d.get('ids'), d.get('subjects'), d.get('title'), d.get('perStation', 4))}
     raise AuthError('Unknown action.', 404)

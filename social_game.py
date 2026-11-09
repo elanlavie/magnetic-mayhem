@@ -19,7 +19,7 @@ MAX_SHIELDS=2
 
 def configure(room,options):
     room['game']={'phase':'lobby','round':0,'impostorCount':max(1,min(3,int(options.get('impostors',1)))),
-                  'tasksPerCrew':max(1,min(7,int(options.get('tasksPerCrew',3)))),
+                  'tasksPerCrew':max(1,min(12,int(options.get('tasksPerCrew',5)))),
                   'discussionSeconds':max(15,min(180,int(options.get('discussionSeconds',30)))),
                   'voteSeconds':max(15,min(300,int(options.get('voteSeconds',90)))),
                   'questionsPerTag':max(1,min(5,int(options.get('questionsPerTag',2)))),
