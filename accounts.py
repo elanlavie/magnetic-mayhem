@@ -527,10 +527,24 @@ def alert_retry(db, user, alert_id):
 
 # ---------------------------------------------------------------- saved game packs
 
+def _pack_class_ids(r):
+    """None means every class of the pack's teacher (the default); otherwise the explicit list ('-' = none on purpose)."""
+    raw = json.loads(r['classes'] or '[]')
+    return None if not raw else [i for i in raw if i != '-']
+
+
+def _pack_in_class(r, class_id, class_teacher):
+    ids = _pack_class_ids(r)
+    return class_teacher == r['teacher'] if ids is None else str(class_id) in ids
+
+
 def _pack_summary(r, class_names=None):
     data = json.loads(r['data'])
-    ids = json.loads(r['classes'] or '[]')
-    return {'id': r['id'], 'title': r['title'], 'created': r['created'],
+    ids = _pack_class_ids(r)
+    every = ids is None
+    if every:
+        ids = list((class_names or {}).keys())
+    return {'allClasses': every, 'id': r['id'], 'title': r['title'], 'created': r['created'],
             'topics': len(data.get('topics', [])), 'questions': sum(len(t.get('questions', [])) for t in data.get('topics', [])),
             'classes': [{'id': i, 'name': (class_names or {}).get(i, '')} for i in ids]}
 
@@ -575,7 +589,7 @@ def pack_get(db, user, pack_id):
     return {'id': r['id'], 'pack': json.loads(r['data'])}
 
 
-def pack_assign(db, user, pack_id, class_ids):
+def pack_assign(db, user, pack_id, class_ids, every=False):
     need_teacher(user)
     ids = []
     with tx(db) as c:
@@ -586,8 +600,8 @@ def pack_assign(db, user, pack_id, class_ids):
             if not c.execute('select 1 from classes where id=? and teacher=? and archived=0', (str(cid), user['email'])).fetchone():
                 raise AuthError('Class not found.', 404)
             ids.append(str(cid))
-        c.execute('update packs set classes=? where id=?', (json.dumps(sorted(set(ids))), r['id']))
-    return {'ok': True, 'classes': sorted(set(ids))}
+        c.execute('update packs set classes=? where id=?', ('[]' if every else json.dumps(sorted(set(ids)) or ['-']), r['id']))
+    return {'ok': True, 'classes': sorted(set(ids)), 'all': every}
 
 
 def pack_delete(db, user, pack_id):
@@ -602,8 +616,10 @@ def class_packs(db, user, class_id):
         raise AuthError('Join this class first.', 403)
     with tx(db) as c:
         rows = c.execute('select * from packs').fetchall()
+        owner = c.execute('select teacher from classes where id=?', (str(class_id),)).fetchone()
+    owner = owner['teacher'] if owner else None
     return [{'id': r['id'], 'title': r['title'], 'topics': _pack_summary(r)['topics'], 'questions': _pack_summary(r)['questions']}
-            for r in rows if str(class_id) in json.loads(r['classes'] or '[]')]
+            for r in rows if _pack_in_class(r, class_id, owner)]
 
 
 def pack_for(db, email, pack_id, class_id):
@@ -612,7 +628,9 @@ def pack_for(db, email, pack_id, class_id):
         r = c.execute('select * from packs where id=?', (str(pack_id),)).fetchone()
     if not r:
         raise AuthError('That game is no longer available.', 404)
-    if r['teacher'] != email and not (str(class_id) in json.loads(r['classes'] or '[]') and has_access(db, email, class_id)):
+    with tx(db) as c:
+        owner = c.execute('select teacher from classes where id=?', (str(class_id),)).fetchone()
+    if r['teacher'] != email and not (owner and _pack_in_class(r, class_id, owner['teacher']) and has_access(db, email, class_id)):
         raise AuthError('That game is not assigned to this class.', 403)
     return json.loads(r['data'])
 
@@ -796,7 +814,7 @@ def dispatch(db, path, d, ask=None):
     if path == '/api/pack/get':
         return pack_get(db, user, d.get('id'))
     if path == '/api/pack/assign':
-        return pack_assign(db, user, d.get('id'), d.get('classIds'))
+        return pack_assign(db, user, d.get('id'), d.get('classIds'), bool(d.get('all')))
     if path == '/api/pack/delete':
         return pack_delete(db, user, d.get('id'))
     if path == '/api/class/packs':
