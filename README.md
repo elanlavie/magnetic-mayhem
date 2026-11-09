@@ -4,7 +4,7 @@ Explore a damaged space station, run cargo relays, talk science with the ship en
 
 ## 🧠 Claude Sonnet is always on
 
-Every tutor conversation—solo or multiplayer—uses `claude-sonnet-5-5` through the Python server. There is no AI-off setting, keyword tutor, or offline game mode. API errors preserve progress and ask the player to retry; they never switch to scripted feedback. Existing rooms from the earlier version also use Sonnet after upgrading.
+Every tutor conversation—solo, bot practice, or multiplayer—uses `claude-sonnet-5-5` through the Python server. There is no AI-off setting, keyword tutor, or offline game mode. API errors preserve progress and ask the player to retry; they never switch to scripted feedback. Existing rooms from the earlier version also use Sonnet after upgrading.
 
 Configure these environment variables on the server:
 
@@ -38,6 +38,52 @@ Open Mission control, enter the teacher access code, review the topic pack, and 
 
 Choose co-op or two-team race and optionally allow independent solo study using the room code. The dashboard tracks explanations and repairs. TXT/Markdown/JSON imports are built in; PDF and DOCX text extraction use the dependencies in `requirements.txt`. Review AI-generated questions and reference answers before classroom use.
 
+## 🕵️ Impostor missions
+
+In Mission control, choose **Impostor mission** (the default), select 1–3 impostors,
+1–7 science conversations per crewmate, and separate discussion/voting durations.
+New rooms begin in a lobby. Students join before the teacher clicks **Assign roles
+& start round**. Minimum players: 4 for one impostor, 7 for two, 10 for three.
+Automatic fun names remain available. Teachers can remove lobby participants and
+end or restart rounds. Teacher-only role spoilers should stay off the projector.
+
+- Crewmates win by finishing every assigned Sonnet conversation (including ghost
+  tasks) or by voting out all impostors. These conversations are the actual tasks;
+  collecting cells and installing repairs are not required in this mode.
+- Impostors have real science conversations as cover, but their practice does not
+  advance the crew task bar. They win by reaching parity with the living crew or
+  by letting a reactor sabotage expire.
+- Impostors can tag nearby crewmates with clear line of sight. A 30-second cooldown
+  applies at round start, after a tag, and after meetings. Tags are non-graphic.
+- Living players can report nearby downed explorers. Each living player also gets
+  one emergency meeting, called at the arrival pad, with a shared cooldown.
+- Meetings default to **30 seconds spoken classroom discussion**, then **30 seconds
+  private voting**. Teachers can change both durations and optionally enable written
+  in-game discussion. Ghosts observe without speaking in written chat or voting.
+  Ties, skip votes, and missing ballots do not force an ejection. Ballots are locked
+  after submission. Individual choices stay private during the meeting; aggregate
+  tallies appear afterward. Roles remain secret until the round ends.
+- Reactor sabotage gives 90 seconds to stabilize two panels, at Motors and
+  Generators. Any living player can help. Reports pause the reactor timer during
+  meetings; the teacher's pause freezes round deadlines and cooldowns.
+- Tagged and voted-out players become ghosts and can keep learning. Ghost
+  crewmates still contribute tasks; ghosts cannot intervene in the round.
+- Winning a round and academic progress are separate. Practice never awards the
+  same academic points twice. Assigned conversations can count for a new round
+  even when the underlying concept was completed in an earlier round.
+
+**Solo bot practice:** Study solo offers an impostor practice game with five
+computer-controlled players, with a choice of crewmate, impostor, or random role.
+Bots navigate walls, simulate time spent doing tasks, tag, sabotage, repair,
+report, and vote. Crew bots vote from what they observed; otherwise they skip.
+They are explicitly labeled bots. Their task completion is game simulation, not
+AI grading or evidence of student understanding. The human's science conversation
+always goes to Claude Sonnet. Bot meetings include written NPC comments so solo
+players can participate. Solo exploration remains available as a separate choice.
+
+The tutor also occasionally uses “Let the equation guide your thinking!”,
+“Yum Fysicz!”, and “Good Energy!” where they fit.
+
 ## Hosting
 
 Run a single instance behind HTTPS. The included `render.yaml` proposes one paid Python service with a 1 GB persistent disk. The existing production service is at https://magnetic-mayhem.onrender.com/. GitHub source: https://github.com/elanlavie/magnetic-mayhem.
@@ -48,4 +94,4 @@ SQLite stores rooms, conversations, progress, and relay records. Only files on t
 
 Run `python3 -m unittest discover -s tests -v` and `node tests/client-smoke.cjs`.
 
-The backend suite covers always-on AI (including legacy rooms), provider failure without fallback, scoring, retries, concurrent replies while leaving, saved conversations, assigned names, relay validation and rewards, restart recovery, and multiplayer rules. Client checks cover onboarding, Enter / Shift+Enter / IME input, automatic countdowns, Escape, backdrop dismissal, and saved drafts. Chrome verification additionally exercises actual controls and rendering; the local UI fixture is separate from the production build. Real Sonnet integration is verified on the deployed service.
+The 52-test backend suite covers hidden roles, private ballots, bot navigation, classroom and written meetings, tags, sabotage, ghost learning, restart recovery, plus always-on AI (including legacy rooms), provider failure without fallback, scoring, retries, concurrent replies while leaving, saved conversations, assigned names, relay validation and rewards, restart recovery, and multiplayer rules. Client checks cover onboarding, Enter / Shift+Enter / IME input, automatic countdowns, Escape, backdrop dismissal, and saved drafts. Chrome verification additionally exercises actual controls and rendering; the local UI fixture is separate from the production build. Real Sonnet integration is verified on the deployed service.
