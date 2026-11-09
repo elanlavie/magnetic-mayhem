@@ -21,6 +21,7 @@ def configure(room,options):
                   'tasksPerCrew':max(1,min(7,int(options.get('tasksPerCrew',5)))),
                   'roundSeconds':(0 if not int(options.get('roundSeconds',0) or 0) else max(120,min(3600,int(options['roundSeconds'])))),'crewTargetPct':max(50,min(100,int(options.get('crewTargetPct',80)))),'roundEndsAt':0,
                   'meetingSeconds':(0 if int(options.get('meetingSeconds',240) or 0)==0 else max(60,min(900,int(options.get('meetingSeconds',240))))),
+                  'briefingSeconds':max(10,min(120,int(options.get('briefingSeconds',60) or 60))),'briefingEndsAt':0,
                   'interruptChats':bool(options.get('interruptChats',True)),
                   'discussionSeconds':max(15,min(180,int(options.get('discussionSeconds',30)))),
                   'voteSeconds':max(15,min(300,int(options.get('voteSeconds',90)))),
@@ -51,7 +52,7 @@ def start(room):
     human=next((p['id'] for p in room['players'].values() if not p.get('bot')),None)
     if preferred=='impostor':impostors={human}
     elif preferred=='crew':impostors={secrets.choice([p['id'] for p in room['players'].values() if p.get('bot')])}
-    now=time.time();g.update(startedAt=now,penalty=0,tagCount=0,meetingCount=0,summary=None,phase='playing',round=g['round']+1,winner=None,reason='',meeting=None,bodies=[],lastMeeting=None,nextMeetingAt=now+g['meetingSeconds'] if g['meetingSeconds'] else 0,roundEndsAt=now+g['roundSeconds'] if g['roundSeconds'] else 0)
+    now=time.time();g.update(briefingEndsAt=now+g['briefingSeconds'],startedAt=now,penalty=0,tagCount=0,meetingCount=0,summary=None,phase='briefing',round=g['round']+1,winner=None,reason='',meeting=None,bodies=[],lastMeeting=None,nextMeetingAt=0,roundEndsAt=0)
     for p in room['players'].values():
         park(p)
         p.update(role='impostor' if p['id'] in impostors else 'crew',alive=True,
@@ -96,9 +97,15 @@ def victory(room):
     elif total and done>=target_for(room,total):finish(room,'crew','The crew reached its science target! 🧠')
     elif g.get('roundEndsAt') and time.time()>=g['roundEndsAt']:finish(room,'impostors','Time ran out before the crew reached its target. ⏱️')
 
+def begin_play(room):
+    """The role briefing is over: the round clock, tag cooldowns and meeting schedule start now."""
+    g=room['game'];now=time.time()
+    g.update(phase='playing',startedAt=now,nextMeetingAt=now+g['meetingSeconds'] if g['meetingSeconds'] else 0,roundEndsAt=now+g['roundSeconds'] if g['roundSeconds'] else 0)
+    for p in room['players'].values():p['killReadyAt']=now+KILL_COOLDOWN
+
 def shift_clocks(room,seconds):
     g=room['game']
-    for k in ('nextMeetingAt','roundEndsAt'):
+    for k in ('nextMeetingAt','roundEndsAt','briefingEndsAt'):
         if g.get(k):g[k]+=seconds
     if g.get('meeting'):
         for k in ('started','voteOpensAt','endsAt'):g['meeting'][k]+=seconds
@@ -135,6 +142,7 @@ def advance(room):
     if not g or room.get('paused') or room.get('closed'):return False
     now=time.time();changed=bot_tick(room)
     if room['paused']:return changed
+    if g['phase']=='briefing' and now>=g.get('briefingEndsAt',0):begin_play(room);changed=True
     if g['phase']=='meeting':
         m=g['meeting'];living=[p for p in room['players'].values() if p.get('alive',True)]
         if now>=m['endsAt'] or (now>=m['voteOpensAt'] and all(p['id'] in m['votes'] for p in living)):
@@ -220,7 +228,7 @@ def action(room,player,data,walls):
             if choice not in room['players'] or not room['players'][choice].get('alive',True):raise SocialError('Choose living players, or skip.')
         if player['id'] in m['votes']:return
         m['votes'][player['id']]=picks;advance(room);return
-    if g['phase']!='playing':raise SocialError('Wait for the teacher to start, or for this meeting to finish.')
+    if g['phase']!='playing':raise SocialError('The round starts when the role briefing ends.' if g['phase']=='briefing' else 'Wait for the teacher to start, or for this meeting to finish.')
     if not player.get('alive',True):raise SocialError('You are a ghost. Your science tasks still help the crew; game interventions are disabled.')
     if kind=='tag':
         if player.get('role')!='impostor':raise SocialError('Only impostors can tag players out.')
@@ -259,7 +267,7 @@ def record_task(room,player,qid):
 
 def public(room):
     g=room['game'];now=time.time();done,total=task_counts(room)
-    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','lastMeeting','nextMeetingAt','meetingSeconds','interruptChats','writtenDiscussion','questionsPerTag','roundSeconds','crewTargetPct','roundEndsAt')}
+    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','lastMeeting','nextMeetingAt','meetingSeconds','interruptChats','briefingSeconds','briefingEndsAt','writtenDiscussion','questionsPerTag','roundSeconds','crewTargetPct','roundEndsAt')}
     result['summary']=g.get('summary') if g['phase']=='ended' else None;result['crewPenalty']=g.get('penalty',0)
     result.update(botPractice=bool(room.get('botPractice')),serverNow=now,crewTasksDone=done,crewTasksTotal=total,crewTasksTarget=target_for(room,total) if total else 0,minimumPlayers=MIN_PLAYERS,impostorsIfStartedNow=impostors_for(len(room['players'])))
     m=g.get('meeting');result['meeting']=None
