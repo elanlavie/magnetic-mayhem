@@ -63,9 +63,10 @@ class SocialTests(unittest.TestCase):
         m=self.open_meeting()
         with self.assertRaises(game.GameError):self.act(self.crew[0],'vote',meeting=m,target='unknown')
         self.act(self.crew[0],'vote',meeting=m,target='skip');self.act(self.crew[0],'vote',meeting=m,target=self.imp['id']);self.assertEqual(self.g['meeting']['votes'][self.crew[0]['id']],[])
-    def test_meeting_discussion_timer_prevents_early_voting(self):
+    def test_voting_is_open_immediately_and_defaults_are_30_and_30(self):
         social.meeting(self.room,self.crew[0],'Test meeting');m=self.g['meeting']
-        with self.assertRaises(game.GameError):self.act(self.crew[0],'vote',meeting=m['id'],target='skip')
+        self.assertEqual((self.g['discussionSeconds'],self.g['voteSeconds']),(30,30))
+        self.act(self.crew[0],'vote',meeting=m['id'],target='skip');self.assertEqual(m['votes'][self.crew[0]['id']],[])  # no waiting for the discussion to end
         self.assertTrue(game.dispatch('/api/move',{**self.auth[self.crew[1]['id']],'x':810,'y':460})['ok'])  # meetings never freeze movement
     def test_no_emergency_or_report_and_scheduled_meeting_needs_a_tag(self):
         for action in ('emergency','report'):

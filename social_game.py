@@ -24,7 +24,7 @@ def configure(room,options):
                   'briefingSeconds':max(10,min(120,int(options.get('briefingSeconds',60) or 60))),'briefingEndsAt':0,'impostorsEjected':0,
                   'interruptChats':bool(options.get('interruptChats',True)),
                   'discussionSeconds':max(15,min(180,int(options.get('discussionSeconds',30)))),
-                  'voteSeconds':max(15,min(300,int(options.get('voteSeconds',90)))),
+                  'voteSeconds':max(15,min(300,int(options.get('voteSeconds',30)))),
                   'questionsPerTag':1,
                   'writtenDiscussion':bool(options.get('writtenDiscussion',False)),'winner':None,'reason':'','meeting':None,'bodies':[],
                   'lastMeeting':None,'nextMeetingAt':0}
@@ -152,7 +152,7 @@ def advance(room):
         if now>=g.get('briefingEndsAt',0) or (humans and all(p.get('briefReady') for p in humans)):begin_play(room);changed=True
     if g['phase']=='meeting':
         m=g['meeting'];living=[p for p in room['players'].values() if p.get('alive',True)]
-        if now>=m['endsAt'] or (now>=m['voteOpensAt'] and all(p['id'] in m['votes'] for p in living)):
+        if now>=m['endsAt'] or all(p['id'] in m['votes'] for p in living):
             resolve_meeting(room);changed=True
     if g['phase']=='playing' and g.get('meetingSeconds') and now>=g.get('nextMeetingAt',0):
         if g.get('tagsSinceMeeting',0):
@@ -229,7 +229,6 @@ def action(room,player,data,walls):
         m=g['meeting']
         if not player.get('alive',True):raise SocialError('Ghosts can observe meetings, but cannot vote.')
         if player.get('active'):raise SocialError('Finish or leave your current chat, then cast your vote. Your chat is saved.')
-        if now<m['voteOpensAt']:raise SocialError('Discuss what you saw first. Voting opens shortly.')
         picks=data.get('targets',[data.get('target','skip')]) if isinstance(data.get('targets',[]),list) else []
         picks=list(dict.fromkeys(str(c) for c in picks if str(c)!='skip' and c))
         if len(picks)>MAX_SUSPECTS:raise SocialError(f'Pick at most {MAX_SUSPECTS} suspects.')
