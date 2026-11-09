@@ -57,7 +57,7 @@ const Classes=(()=>{
   const alertId=new URLSearchParams(location.search).get('alert');
   if(alertId&&user.role==='teacher'){history.replaceState(null,'',location.pathname);openAlert(alertId)}
   populateClassPick();
-  if(user.role==='teacher')libMount();
+  if(user.role==='teacher'){libMount();materialMount()}
  }
 
  // ---------- teacher / student class screen
@@ -147,6 +147,38 @@ const Classes=(()=>{
    try{const s=await call('/api/library/import',{text:document.getElementById('lib-text').value});document.getElementById('lib-text').value='';note.textContent=`Added "${s.title}" with ${s.count} questions.`;await libLoad()}
    catch(e){note.textContent='';toast(e.message)}finally{b.disabled=false}};
   libLoad();
+ }
+
+ // ---------- teacher material helpers: voice dictation + AI planning chat
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ function dictation(button,target){
+  if(!SR){button.classList.add('hidden');return}
+  let rec=null,base='';
+  button.onclick=()=>{
+   if(rec){rec.stop();return}
+   rec=new SR();rec.continuous=true;rec.interimResults=true;rec.lang=navigator.language||'en-US';base=target.value&&!/\s$/.test(target.value)?target.value+' ':target.value;
+   rec.onresult=e=>{let t='';for(let i=0;i<e.results.length;i++)t+=e.results[i][0].transcript;target.value=base+t;target.dispatchEvent(new Event('input'))};
+   rec.onend=()=>{rec=null;button.textContent='🎤 Dictate';button.classList.remove('rec')};rec.onerror=ev=>{toast(ev.error==='not-allowed'?'Allow microphone access in your browser to dictate.':'Dictation stopped.')};
+   try{rec.start();button.textContent='⏹ Stop dictating';button.classList.add('rec')}catch{rec=null}
+  };
+ }
+ function materialMount(){
+  if(document.getElementById('assist-box'))return;
+  const topics=document.getElementById('topics');
+  topics.insertAdjacentHTML('beforebegin','<div class="toolbar"><button type="button" id="dict-topics" class="small">🎤 Dictate</button><span class="muted">Speak your content, or type it. Chrome sends dictation audio to Google for transcription.</span></div>');
+  dictation(document.getElementById('dict-topics'),topics);
+  document.getElementById('generate').insertAdjacentHTML('afterend',`<details id="assist-box" class="lib-box" open><summary>💬 Plan it with the AI helper</summary>
+   <p class="hint-text">Describe what you are teaching. The helper asks questions, suggests topics, simulations and images. When it sounds right, click "Make questions from this conversation".</p>
+   <div id="assist-log" class="chatlog" aria-live="polite" style="max-height:260px"></div>
+   <textarea id="assist-input" rows="2" placeholder="For example: I teach magnetism to 9th graders. We covered domains and electromagnets."></textarea>
+   <div class="toolbar"><button type="button" id="dict-assist" class="small">🎤 Dictate</button><button type="button" id="assist-send" class="primary small">Send</button><button type="button" id="assist-make" class="small">✦ Make questions from this conversation</button></div></details>`);
+  const log=document.getElementById('assist-log'),input=document.getElementById('assist-input'),msgs=[];
+  const draw=()=>{log.innerHTML=msgs.map(m=>`<div class="bubble ${m.role==='user'?'user':''}"><small>${m.role==='user'?'YOU':'AI HELPER'}</small>${esc(m.text)}</div>`).join('');log.scrollTop=log.scrollHeight};
+  dictation(document.getElementById('dict-assist'),input);
+  const send=async()=>{const text=input.value.trim();if(!text)return;msgs.push({role:'user',text});input.value='';draw();const b=document.getElementById('assist-send');b.disabled=true;
+   try{const r=await call('/api/assist',{messages:msgs,material:document.getElementById('topics').value});msgs.push({role:'assistant',text:r.reply})}catch(e){toast(e.message);msgs.pop();input.value=text}finally{b.disabled=false;draw()}};
+  document.getElementById('assist-send').onclick=send;input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
+  document.getElementById('assist-make').onclick=()=>{if(!msgs.length)return toast('Chat with the helper first.');const t=document.getElementById('topics');t.value=(t.value?t.value+'\n\n':'')+'Teacher planning conversation:\n'+msgs.map(m=>(m.role==='user'?'Teacher: ':'Helper: ')+m.text).join('\n');document.getElementById('generate').click()};
  }
 
  // ---------- class picker inside game setup
