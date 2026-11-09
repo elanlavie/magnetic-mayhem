@@ -28,8 +28,8 @@ class SocialTests(unittest.TestCase):
         self.assertNotIn('votes',json.dumps(snapshot['room']['game']))
         m=self.open_meeting();self.act(self.imp,'vote',meeting=m,target=self.crew[0]['id']);snap=game.dispatch('/api/state',self.auth[self.crew[1]['id']]);self.assertIsNone(snap['player']['yourVote']);self.assertNotIn('votes',snap['room']['game']['meeting'])
         self.assertEqual(snap['room']['game']['meeting']['voted'],[self.imp['id']])
-    def test_crew_cannot_tag_or_sabotage(self):
-        for action in ('tag','sabotage'):
+    def test_crew_cannot_tag_and_sabotage_is_gone(self):
+        for action in ('tag','sabotage','stabilize'):
             with self.assertRaises(game.GameError):self.act(self.crew[0],action,target=self.crew[1]['id'])
     def test_tag_cooldown_distance_and_wall_validation(self):
         with self.assertRaises(game.GameError):self.act(self.imp,'tag',target=self.crew[0]['id'])
@@ -42,7 +42,7 @@ class SocialTests(unittest.TestCase):
         with self.assertRaises(game.GameError):self.act(self.imp,'tag',target=self.crew[1]['id'])
     def test_ghost_keeps_learning_but_cannot_intervene(self):
         ghost=self.crew[0];ghost['alive']=False
-        for action in ('emergency','report','sabotage','tag','stabilize'):
+        for action in ('emergency','report','tag'):
             with self.assertRaises(game.GameError):self.act(ghost,action)
         qid=ghost['roundTasks'][0];i,j=map(int,qid.split(':'));ghost.update(x=game.POSITIONS[i][0],y=game.POSITIONS[i][1])
         a=game.dispatch('/api/start',{**self.auth[ghost['id']],'topic':i})['player']['active'];self.assertEqual(a['index'],j)
@@ -65,12 +65,6 @@ class SocialTests(unittest.TestCase):
         self.g['nextMeetingAt']=0;self.act(self.crew[0],'emergency');m=self.g['meeting']
         with self.assertRaises(game.GameError):self.act(self.crew[0],'vote',meeting=m['id'],target='skip')
         self.assertTrue(game.dispatch('/api/move',{**self.auth[self.crew[1]['id']],'x':810,'y':460})['ok'])  # meetings never freeze movement
-    def test_sabotage_repair_and_expiry(self):
-        self.g['nextSabotageAt']=0;self.act(self.imp,'sabotage')
-        self.crew[0].update(x=800,y=650);self.act(self.crew[0],'stabilize',panel=0)
-        self.assertEqual(self.g['sabotage']['fixed'],[0])
-        self.crew[1].update(x=1340,y=650);self.act(self.crew[1],'stabilize',panel=1);self.assertIsNone(self.g['sabotage'])
-        self.g['nextSabotageAt']=0;self.act(self.imp,'sabotage');self.g['sabotage']['deadline']=time.time()-1;game.dispatch('/api/state',self.auth[self.crew[0]['id']]);self.assertEqual(self.g['winner'],'impostors')
     def test_parity_wins_and_tagged_players_are_hidden(self):
         for victim in self.crew[:2]:self.imp['killReadyAt']=0;self.imp['tagCharge']=2;self.act(self.imp,'tag',target=victim['id'])
         self.assertEqual(self.g['winner'],'impostors')

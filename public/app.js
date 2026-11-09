@@ -54,9 +54,9 @@ function ghostWatch(){const r=state.room,p=state.player;if(!r.game)return;
  meSeen=p.alive!==false;
  for(const x of r.players){if(x.id!==p.id&&aliveSeen[x.id]===true&&x.alive===false)logEvent(`👻 ${x.name} was eliminated.`);aliveSeen[x.id]=x.alive!==false}
  const g=r.game,mid=g.meeting?.id||null;if(mid&&mid!==logSeen.meeting)logEvent('🚨 A crew meeting was called.');logSeen.meeting=mid||logSeen.meeting;
- const sab=!!g.sabotage;if(sab&&!logSeen.sab)logEvent('⚠️ Reactor sabotage! Crew, fix both panels.');if(!sab&&logSeen.sab)logEvent('✅ The sabotage was resolved.');logSeen.sab=sab;
+ 
  if(logSeen.phase&&logSeen.phase!==g.phase){if(g.phase==='playing'&&logSeen.phase==='lobby')logEvent(`🚀 Round ${g.round} started.`);if(g.phase==='ended')logEvent('🏁 The round ended.')}logSeen.phase=g.phase;
- $('#gamelog').classList.remove('hidden');if(!$('#gamelog-list').children.length)$('#gamelog-list').innerHTML='<li class="muted">Nothing yet. Eliminations, meetings and sabotage will show up here.</li>'}
+ $('#gamelog').classList.remove('hidden');if(!$('#gamelog-list').children.length)$('#gamelog-list').innerHTML='<li class="muted">Nothing yet. Eliminations and meetings will show up here.</li>'}
 const logSeen={};
 function logEvent(t){const ul=$('#gamelog-list');if(!ul)return;ul.querySelectorAll('.muted').forEach(e=>e.remove());const li=document.createElement('li');const d=new Date();li.innerHTML=`<small>${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}</small> ${esc(t)}`;ul.prepend(li);while(ul.children.length>30)ul.lastChild.remove()}
 function updateHUD(){if(!state)return;ghostWatch();for(const id of ['#cell-count','#repair-count','#relay-start'])$(id).classList.remove('hidden');const{room:r,player:p}=state,total=r.pack.topics.reduce((n,t)=>n+topicCount(t),0);
