@@ -88,6 +88,19 @@ class ClassTests(unittest.TestCase):
         with self.assertRaises(accounts.AuthError): game.dispatch('/api/create', {'userToken': other, 'classId': self.cls['id'], 'mode': 'coop', 'pack': copy.deepcopy(game.BUILTIN)})
         with self.assertRaises(accounts.AuthError): self.api('/api/class/members', self.alex, classId=self.cls['id'])
 
+    def test_teacher_can_delete_a_class_and_its_data(self):
+        info = self.student_in_room()
+        self.chat_with_tutor(info, 'I want to die')
+        other = self.sign('other@wccusd.net', 'Other Teacher')
+        with self.assertRaises(accounts.AuthError): self.api('/api/class/delete', other, classId=self.cls['id'])
+        with self.assertRaises(accounts.AuthError): self.api('/api/class/delete', self.alex, classId=self.cls['id'])
+        self.api('/api/class/delete', self.teacher, classId=self.cls['id'])
+        self.assertEqual(self.api('/api/class/list', self.teacher)['classes'], [])
+        self.assertEqual(self.api('/api/class/list', self.alex)['classes'], [])
+        self.assertEqual(self.api('/api/class/alerts', self.teacher)['alerts'], [])
+        with self.assertRaises(accounts.AuthError): self.api('/api/class/join', self.sign('mia@wccschools.org', 'Mia'), code=self.invite['code'])
+        with self.assertRaises(game.GameError): game.dispatch('/api/state', {'code': info['code'], 'token': info['token']})
+
     # --- nicknames
     def test_nicknames_are_suggested_edited_saved_and_used_in_games(self):
         member = self.api('/api/class/members', self.teacher, classId=self.cls['id'])['members'][0]
