@@ -101,6 +101,32 @@ class ClassTests(unittest.TestCase):
         with self.assertRaises(accounts.AuthError): self.api('/api/class/join', self.sign('mia@wccschools.org', 'Mia'), code=self.invite['code'])
         with self.assertRaises(game.GameError): game.dispatch('/api/state', {'code': info['code'], 'token': info['token']})
 
+    # --- private question library
+    LIB_AI = {'title': 'E&M Practice Test', 'questions': [
+        {'subject': 'Magnetism', 'prompt': 'Why does a magnet attract a nail?', 'answer': 'Domains align.', 'hint': 'Think about tiny magnets.'},
+        {'subject': 'Magnetism', 'prompt': 'What happens to a compass near a wire with current?', 'answer': 'It deflects.', 'hint': 'Current makes a field.'},
+        {'subject': 'Electricity', 'prompt': 'Why do bulbs in a series circuit dim?', 'answer': 'Shared voltage.', 'hint': 'Count the paths.'},
+        {'subject': 'Forces', 'prompt': '', 'answer': 'x', 'hint': 'x'}]}
+
+    def test_library_is_private_and_builds_a_subject_only_pack(self):
+        seen = {}
+        def fake_ai(system, data, max_tokens=650): seen['system'] = system; return self.LIB_AI
+        with patch.object(game, 'ai', side_effect=fake_ai):
+            lib = game.dispatch('/api/library/import', {'userToken': self.teacher, 'text': 'MC test text'})
+        self.assertEqual((lib['title'], lib['count'], lib['subjects']), ('E&M Practice Test', 3, {'Magnetism': 2, 'Electricity': 1}))  # blank question dropped
+        self.assertIn('multiple-choice', seen['system'])
+        other = self.sign('other@wccusd.net', 'Other Teacher')
+        self.assertEqual(game.dispatch('/api/library/list', {'userToken': other})['sets'], [])
+        with self.assertRaises(accounts.AuthError): game.dispatch('/api/library/get', {'userToken': other, 'id': lib['id']})
+        with self.assertRaises(accounts.AuthError): game.dispatch('/api/library/pack', {'userToken': other, 'ids': [lib['id']], 'subjects': ['Magnetism']})
+        with self.assertRaises(accounts.AuthError): game.dispatch('/api/library/import', {'userToken': self.alex, 'text': 'x'})
+        pack = game.dispatch('/api/library/pack', {'userToken': self.teacher, 'ids': [lib['id']], 'subjects': ['magnetism'], 'title': 'Magnetism only'})['pack']
+        self.assertEqual([(t['name'], len(t['questions'])) for t in pack['topics']], [('Magnetism', 2)])
+        room = game.dispatch('/api/create', {'userToken': self.teacher, 'classId': self.cls['id'], 'mode': 'coop', 'pack': pack})  # usable in a game
+        self.assertTrue(room['code'])
+        game.dispatch('/api/library/delete', {'userToken': self.teacher, 'id': lib['id']})
+        self.assertEqual(game.dispatch('/api/library/list', {'userToken': self.teacher})['sets'], [])
+
     # --- nicknames
     def test_nicknames_are_suggested_edited_saved_and_used_in_games(self):
         member = self.api('/api/class/members', self.teacher, classId=self.cls['id'])['members'][0]
