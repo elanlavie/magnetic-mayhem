@@ -218,8 +218,11 @@ def snapshot(r,p): return {'room':room_public(r),'player':{**private_player(p),*
 
 def dispatch(path,d):
     if path=='/api/config': return {'live':bool(KEY),'model':MODEL if KEY else None,'teacherProtected':bool(TEACHER_KEY),'builtin':None if accounts.enabled() else BUILTIN,'gameTypes':game_types.public(),**accounts.public_config()}
-    if path.startswith('/api/auth/') or path.startswith('/api/class/') or path.startswith('/api/library/'):
+    if path.startswith('/api/auth/') or path.startswith('/api/class/') or path.startswith('/api/library/') or path.startswith('/api/pack/'):
         if not accounts.enabled():raise GameError('Classes are not enabled on this server.')
+        if path=='/api/pack/save':
+            if not isinstance(d.get('pack'),dict):raise GameError('Nothing to save yet.')
+            d={**d,'pack':validate_pack(copy.deepcopy(d['pack']))}
         result=accounts.dispatch(DB,path,d,ai)
         if path=='/api/library/pack':result['pack']=validate_pack(result['pack'])
         return result
@@ -287,9 +290,11 @@ def dispatch(path,d):
         game_type=str(d.get('gameType') or game_types.DEFAULT)
         problem=game_types.check(game_type,mode)
         if problem:raise GameError(problem)
-        class_id=owner=None
+        class_id=owner=None;saved_pack=None
         if accounts.enabled():
             user=accounts.user_for(DB,d)
+            if d.get('packId'):
+                saved_pack=accounts.pack_for(DB,user['email'],d['packId'],str(d.get('classId','')));d={**d,'pack':saved_pack}
             class_id=str(source['classId']) if source and source.get('classId') else str(d.get('classId',''))
             if not class_id:raise GameError('Choose one of your classes first.')
             if mode in ('solo','impostorSolo'):
@@ -298,7 +303,7 @@ def dispatch(path,d):
                 accounts.need_teacher(user)
                 if not accounts.is_owner(DB,user['email'],class_id):raise accounts.AuthError('Class not found.',404)
             owner=user['email']
-            if user['role']!='teacher' and not source:raise GameError('Ask your teacher for a study code to practice on your own.')
+            if user['role']!='teacher' and not source and not saved_pack:raise GameError('Ask your teacher for a study code to practice on your own.')
             if not d.get('pack'):raise GameError('Add your questions before creating a game.')
         elif mode not in ('solo','impostorSolo'): teacher(d)
         pack=validate_pack(copy.deepcopy(d.get('pack') or BUILTIN))

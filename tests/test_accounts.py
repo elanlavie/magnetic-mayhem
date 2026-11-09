@@ -286,4 +286,25 @@ class ClassTests(unittest.TestCase):
             self.api('/api/class/alert/retry', self.teacher, alertId=alert['id']); retry.assert_called_once()
 
 
+    def test_saved_packs_are_reusable_and_assignable(self):
+        pack = {'title': 'Circuits', 'topics': [{'name': 'Ohm', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'hint': 'h'}]}]}
+        saved = self.api('/api/pack/save', self.teacher, pack=pack)
+        listed = self.api('/api/pack/list', self.teacher)['packs']
+        self.assertEqual([p['title'] for p in listed], ['Circuits']);self.assertEqual(listed[0]['questions'], 1)
+        # not assigned yet: the student sees nothing and cannot play it
+        self.assertEqual(self.api('/api/class/packs', self.alex, classId=self.cls['id'])['packs'], [])
+        with self.assertRaises(accounts.AuthError): self.api('/api/create', self.alex, mode='solo', classId=self.cls['id'], packId=saved['id'])
+        self.api('/api/pack/assign', self.teacher, id=saved['id'], classIds=[self.cls['id']])
+        self.assertEqual([p['title'] for p in self.api('/api/class/packs', self.alex, classId=self.cls['id'])['packs']], ['Circuits'])
+        room = self.api('/api/create', self.alex, mode='solo', classId=self.cls['id'], packId=saved['id'])
+        self.assertTrue(room['code'])
+        # another teacher cannot see, load, or assign it
+        other = self.sign('other@wccusd.net', 'Other')
+        self.assertEqual(self.api('/api/pack/list', other)['packs'], [])
+        with self.assertRaises(accounts.AuthError): self.api('/api/pack/get', other, id=saved['id'])
+        self.assertEqual(self.api('/api/pack/get', self.teacher, id=saved['id'])['pack']['title'], 'Circuits')
+        self.api('/api/pack/delete', self.teacher, id=saved['id'])
+        self.assertEqual(self.api('/api/pack/list', self.teacher)['packs'], [])
+
+
 if __name__ == '__main__': unittest.main()
