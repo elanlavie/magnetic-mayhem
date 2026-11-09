@@ -180,8 +180,8 @@ class ThinkTimeTests(unittest.TestCase):
     def test_thinking_time_scales_with_difficulty_and_is_bounded(self):
         short = game.think_seconds({'prompt': 'Why do magnets attract iron?'})
         long = game.think_seconds({'prompt': 'word ' * 60 + 'Calculate the current in a 12 V circuit with 4 ohm resistance.'})
-        self.assertTrue(30 <= short < long <= 120)
-        self.assertEqual(game.think_seconds({'prompt': 'x', 'seconds': 500}), 120)
+        self.assertTrue(30 <= short < long <= 150)
+        self.assertEqual(game.think_seconds({'prompt': 'x', 'seconds': 500}), 150)
         self.assertEqual(game.think_seconds({'prompt': 'x', 'seconds': 5}), 30)
         self.assertEqual(game.think_seconds({'prompt': 'x', 'seconds': 'bad'}), game.think_seconds({'prompt': 'x'}))
 
@@ -232,3 +232,32 @@ class VariantEncounterTests(unittest.TestCase):
                     if a['prompt'].startswith('Var'): self.assertTrue(a['image'].startswith('data:image/svg+xml'))
                 self.assertEqual(seen,{'Base 6 V?','Var 9 V?'})
             finally: game.KEY,game.TEACHER_KEY=old
+
+
+class ChoiceTests(unittest.TestCase):
+    def setUp(self):
+        self.t=tempfile.TemporaryDirectory();game.DB=self.t.name+'/t.sqlite';game.ROOMS.clear();self.old=(game.KEY,game.TEACHER_KEY,game.ai);game.KEY='k';game.TEACHER_KEY='tk'
+        self.seen=[]
+        def fake(system,data,max_tokens=650): self.seen.append(data);return {'status':'help','feedback':'Why?'}
+        game.ai=fake
+        q={'prompt':'Which?','answer':'Because.','hint':'h','level':'hard','choices':['a','b','c','d'],'correct':0}
+        pack={'title':'T','topics':[{'name':'A','questions':[q]},{'name':'B','questions':[dict(q),dict(q)]}]}
+        self.pack=pack
+        self.c=game.dispatch('/api/create',{'mode':'coop','pack':pack,'teacherKey':'tk'})
+        j=game.dispatch('/api/join',{'code':self.c['code'],'name':'Ada'});self.auth={'code':self.c['code'],'token':j['token']}
+        self.p=game.ROOMS[self.c['code']]['players'][j['player']['id']];self.p['x'],self.p['y']=game.POSITIONS[0]
+        self.a=game.dispatch('/api/start',{**self.auth,'topic':0})['player']['active']
+    def tearDown(self): game.KEY,game.TEACHER_KEY,game.ai=self.old;self.t.cleanup()
+    def chat(self,**kw): return game.dispatch('/api/chat',{**self.auth,'challenge':self.a['id'],'requestId':str(uuid.uuid4()),'kind':'answer',**kw})
+    def test_choices_visible_but_not_the_key(self):
+        self.assertEqual(self.a['choices'],['a','b','c','d']);self.assertNotIn('correct',json.dumps(game.dispatch('/api/state',self.auth)))
+    def test_choice_and_reasoning_both_required(self):
+        with self.assertRaises(game.GameError): self.chat(text='because magnets do things')
+        with self.assertRaises(game.GameError): self.chat(text='x',choice=1)
+        with self.assertRaises(game.GameError): self.chat(text='because magnets do things',choice=9)
+        self.chat(text='because magnets do things',choice=1)
+        self.assertEqual(self.seen[-1]['student_choice'],1);self.assertIn('My choice: B) b',self.seen[-1]['student'])
+    def test_level_changes_time_and_trim(self):
+        self.assertGreater(game.think_seconds({'prompt':'x','level':'hard'}),game.think_seconds({'prompt':'x','level':'easy'}))
+        p=game.trim_pack(copy.deepcopy(self.pack),2);self.assertEqual([len(t['questions']) for t in p['topics']],[1,1])
+        self.assertEqual(sum(len(t['questions']) for t in game.trim_pack(copy.deepcopy(self.pack),99)['topics']),3)
