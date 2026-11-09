@@ -389,6 +389,7 @@ def dispatch(path,d):
             if not r.get('game'):raise GameError('This room is not an impostor round.')
             social.action(r,p,d,WALLS);save();return snapshot(r,p)
         if r.get('game') and r['game']['phase']=='lobby':raise GameError('Wait for the teacher to start the round. Your chat is saved.')
+        if r.get('game') and r['game']['phase']=='meeting' and r['game'].get('interruptChats',True) and path in ('/api/start','/api/chat','/api/hint'):raise GameError('Meeting in progress: talk it over with your class and vote. Your chats are saved.')
         if path=='/api/move':
             if not p['active']:
                 x=float(d.get('x',p['x'])); y=float(d.get('y',p['y']))
