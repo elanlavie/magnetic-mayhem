@@ -457,14 +457,14 @@ def send_alert(db, alert_id):
         return
     link = f'{PUBLIC_URL}/?alert={alert_id}' if PUBLIC_URL else None
     msg = EmailMessage()
-    msg['Subject'] = f'Magnetic Mayhem safety alert: {row["class_name"]}'
+    msg['Subject'] = f'Yapocalypse safety alert: {row["class_name"]}'
     msg['From'] = os.environ.get('ALERT_FROM') or os.environ.get('SMTP_USER', '')
     msg['To'] = row['teacher']
     msg.set_content(
         f'{CATEGORIES[row["category"]]} in your class "{row["class_name"]}".\n\n'
         f'Student: {row["student_name"]} ({row["student_email"]})\n\n'
         + (f'Review the conversation (sign in with your teacher account):\n{link}\n' if link else
-           'Sign in to the Magnetic Mayhem class dashboard to review the conversation.\n')
+           'Sign in to the Yapocalypse class dashboard to review the conversation.\n')
         + '\nThis automated check can be wrong. Please read the conversation before acting. '
           'The message text is not included in this email to protect student privacy.\n')
     try:

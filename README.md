@@ -1,4 +1,4 @@
-# 🧲 Magnetic Mayhem
+# 🗣️ Yapocalypse
 
 Explore a damaged space station, run cargo relays, talk science with the ship engineer, and restore its systems. Play solo, cooperate with a crew, or race another team.
 
