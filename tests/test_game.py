@@ -176,4 +176,13 @@ class UpgradeTests(unittest.TestCase):
         solo=game.dispatch('/api/create',{'mode':'solo','source':self.auth['code']})
         self.assertEqual(game.ROOMS[solo['code']]['gameType'],'station')
 
+class ThinkTimeTests(unittest.TestCase):
+    def test_thinking_time_scales_with_difficulty_and_is_bounded(self):
+        short = game.think_seconds({'prompt': 'Why do magnets attract iron?'})
+        long = game.think_seconds({'prompt': 'word ' * 60 + 'Calculate the current in a 12 V circuit with 4 ohm resistance.'})
+        self.assertTrue(30 <= short < long <= 120)
+        self.assertEqual(game.think_seconds({'prompt': 'x', 'seconds': 500}), 120)
+        self.assertEqual(game.think_seconds({'prompt': 'x', 'seconds': 5}), 30)
+        self.assertEqual(game.think_seconds({'prompt': 'x', 'seconds': 'bad'}), game.think_seconds({'prompt': 'x'}))
+
 if __name__=='__main__':unittest.main()
