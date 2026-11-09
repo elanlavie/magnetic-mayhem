@@ -123,7 +123,7 @@ class SocialTests(unittest.TestCase):
         with self.assertRaises(game.GameError):game.dispatch('/api/start',{**self.auth[p['id']],'topic':i})  # cannot hop straight back in
         p['safeUntil']=0;self.act(self.imp,'tag',target=p['id']);self.assertFalse(p['alive'])
     def test_impostor_count_follows_among_us_ratio_and_target(self):
-        self.assertEqual([social.impostors_for(n) for n in (4,7,8,10,12,30)],[1,1,2,2,3,7])
+        self.assertEqual([social.impostors_for(n) for n in (4,7,8,10,12,30)],[1,2,2,2,3,8])
         total=social.task_counts(self.room)[1];self.assertEqual(social.target_for(self.room,10),8)
     def test_round_timer_gives_impostors_the_win_and_crew_target_wins(self):
         self.g['roundEndsAt']=time.time()-1;social.advance(self.room);self.assertEqual(self.g['winner'],'impostors')
@@ -136,6 +136,15 @@ class SocialTests(unittest.TestCase):
             for q in p['roundTasks']:
                 if done<need:p.setdefault('roundDone',[]).append(q);done+=1
         social.victory(self.room);self.assertEqual(self.g['winner'],'crew')
+    def test_tags_cost_progress_and_summary_has_leaderboards(self):
+        crew=self.crew[0];self.imp.update(killReadyAt=0,tagCharge=2,x=800,y=460);crew.update(x=830,y=460,safeUntil=0)
+        crew['roundDone']=list(crew['roundTasks'])[:2];before=social.task_counts(self.room)[0]
+        self.act(self.imp,'tag',target=crew['id']);self.assertEqual(self.g['penalty'],social.KILL_PENALTY)
+        self.assertLessEqual(social.task_counts(self.room)[0],before)
+        social.finish(self.room,'impostors','test');s=self.g['summary']
+        self.assertEqual(s['tags'],1);tags=next(b for b in s['boards'] if b['key']=='tags')
+        self.assertEqual(tags['entries'][0]['id'],self.imp['id']);self.assertEqual(tags['entries'][0]['value'],1)
+        self.assertIn(self.imp['id'],s['stats'])
     def test_written_discussion_is_teacher_option_with_rate_limit(self):
         m=self.open_meeting()
         with self.assertRaises(game.GameError):self.act(self.crew[0],'discuss',meeting=m,text='I saw something')

@@ -395,7 +395,7 @@ def dispatch(path,d):
                 if not math.isfinite(x+y): raise GameError('Invalid location.')
                 dist=math.hypot(x-p['x'],y-p['y'])
                 speed_ok=not r.get('game') or dist<=520*min(1.2,max(0,time.time()-p.get('lastMovementAt',time.time()-.4)))+18
-                if speed_ok and dist<=180 and 25<=x<=1575 and 25<=y<=1125 and not any(a-14<x<a+w+14 and b-14<y<b+h+14 for a,b,w,h in WALLS): p['x'],p['y']=x,y;p['lastMovementAt']=time.time()
+                if speed_ok and dist<=180 and 25<=x<=1575 and 25<=y<=1125 and not any(a-14<x<a+w+14 and b-14<y<b+h+14 for a,b,w,h in WALLS): p['x'],p['y']=x,y;p['lastMovementAt']=time.time();(p['stats'].__setitem__('distance',p['stats']['distance']+dist) if r.get('game') and p.get('stats') and r['game']['phase']=='playing' else None)
             return {'ok':True,'x':p['x'],'y':p['y']}
         if path=='/api/start':
             if p['active']: return snapshot(r,p)
