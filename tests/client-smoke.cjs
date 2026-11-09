@@ -21,10 +21,10 @@ const sandbox={console,document,location:{protocol:'http:',search:'',origin:'htt
  if(path==='/api/leave'){suspended=current.player.active;current.player.active=null;}
  if(path==='/api/chat'){chatCount++;current.player.active.messages.push({role:'user',text:d.text},{role:'assistant',text:'A focused follow-up. 💡'});}
  return{ok:true,json:async()=>JSON.parse(JSON.stringify(result))};}};
-const context=vm.createContext(sandbox);vm.runInContext(fs.readFileSync(root+'/public/app.js','utf8'),context);
+const context=vm.createContext(sandbox);vm.runInContext(fs.readFileSync(root+'/public/social.js','utf8'),context);vm.runInContext(fs.readFileSync(root+'/public/app.js','utf8'),context);
 const flush=async()=>{for(let i=0;i<8;i++)await new Promise(r=>setImmediate(r));};
 (async()=>{
- await flush();await vm.runInContext('soloSetup()',context);el('#nickname').value='Tester';el('#solo-pack').value='builtin';await el('#startsolo').onclick();assert.equal(vm.runInContext('view',context),'game');assert(!el('#modal').classList.contains('hidden'),'rules appear at launch');
+ await flush();await vm.runInContext('soloSetup()',context);el('#solo-style').value='solo';el('#nickname').value='Tester';el('#solo-pack').value='builtin';await el('#startsolo').onclick();assert.equal(vm.runInContext('view',context),'game');assert(!el('#modal').classList.contains('hidden'),'rules appear at launch');
  await el('#begin-exploring').onclick();vm.runInContext('near=0',context);await vm.runInContext('interact()',context);
  el('#answer').value='a concise idea';let prevented=false;el('#answer').keydownListener({key:'Enter',shiftKey:false,isComposing:false,keyCode:13,preventDefault(){prevented=true;}});await flush();assert(prevented);assert.equal(chatCount,1);assert(vm.runInContext('timerActive',context),'follow-up countdown starts automatically');assert(vm.runInContext('timerRemaining',context)<=30000);
  el('#answer').keydownListener({key:'Enter',shiftKey:true,isComposing:false,keyCode:13,preventDefault(){throw Error('Shift+Enter must remain a newline');}});assert.equal(chatCount,1);
