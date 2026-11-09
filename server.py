@@ -218,7 +218,7 @@ def dispatch(path,d):
         if path=='/api/round':
             if not r.get('game'):raise GameError('This room is not an impostor round.')
             social.action(r,p,d,WALLS);save();return snapshot(r,p)
-        if r.get('game') and r['game']['phase'] in ('lobby','meeting'):raise GameError('Wait for the teacher to start or for the meeting to finish. Your chat is saved.')
+        if r.get('game') and r['game']['phase']=='lobby':raise GameError('Wait for the teacher to start the round. Your chat is saved.')
         if path=='/api/move':
             if not p['active']:
                 x=float(d.get('x',p['x'])); y=float(d.get('y',p['y']))
@@ -312,7 +312,7 @@ def dispatch(path,d):
                 if qid not in p['completed']:
                     p['completed'].append(qid); p['score']+=points; p['cells']+=1
                     p['history'].append({'question':qid,'points':points,'supported':a['repair'],'topic':r['pack']['topics'][a['topic']]['name']})
-                if r.get('game') and chat_round==p.get('socialRound'):social.record_task(r,p,qid)
+                if r.get('game') and chat_round==p.get('socialRound'):social.conversation_completed(r,p,qid);social.record_task(r,p,qid)
                 a['done']=True
             a['messages'].append({'role':'assistant','text':result['feedback'][:3500]})
             p['cache'][rid]=True

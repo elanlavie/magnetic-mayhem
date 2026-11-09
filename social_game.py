@@ -15,12 +15,14 @@ KILL_COOLDOWN=30
 SABOTAGE_COOLDOWN=60
 SABOTAGE_DURATION=90
 MEETING_COOLDOWN=30
+MAX_SHIELDS=2
 
 def configure(room,options):
     room['game']={'phase':'lobby','round':0,'impostorCount':max(1,min(3,int(options.get('impostors',1)))),
                   'tasksPerCrew':max(1,min(7,int(options.get('tasksPerCrew',3)))),
                   'discussionSeconds':max(15,min(180,int(options.get('discussionSeconds',30)))),
-                  'voteSeconds':max(15,min(120,int(options.get('voteSeconds',30)))),
+                  'voteSeconds':max(15,min(300,int(options.get('voteSeconds',90)))),
+                  'questionsPerTag':max(1,min(5,int(options.get('questionsPerTag',2)))),
                   'writtenDiscussion':bool(options.get('writtenDiscussion',False)),'winner':None,'reason':'','meeting':None,'sabotage':None,'bodies':[],
                   'lastMeeting':None,'nextMeetingAt':0,'nextSabotageAt':0}
 
@@ -45,7 +47,8 @@ def start(room):
         park(p)
         p.update(role='impostor' if p['id'] in impostors else 'crew',alive=True,emergencies=1,
                  roundTasks=secrets.SystemRandom().sample(all_tasks,min(g['tasksPerCrew'],len(all_tasks))),
-                 roundDone=[],killReadyAt=now+KILL_COOLDOWN,socialRound=g['round'],conversations={},x=800,y=460,botPath=[],botTarget=None,botWaitingUntil=0,botSuspect=None)
+                 roundDone=[],killReadyAt=now+KILL_COOLDOWN,socialRound=g['round'],conversations={},x=800,y=460,botPath=[],botTarget=None,botWaitingUntil=0,botSuspect=None,
+                 tagCharge=0,shield=0,notices=[],botChargeAt=0)
     return g
 
 def finish(room,winner,reason):
@@ -123,9 +126,25 @@ def visible_line(a,b,walls):
 def near(a,b,radius,walls):
     return math.dist((a['x'],a['y']),(b['x'],b['y']))<=radius and visible_line((a['x'],a['y']),(b['x'],b['y']),walls)
 
+def notify(player,text):
+    notes=player.setdefault('notices',[]);notes.append({'id':secrets.token_hex(4),'text':text});del notes[:-5]
+
+def conversation_completed(room,player,qid):
+    """Reward a correct conversation. Call BEFORE record_task so we can tell extra chats from assigned ones."""
+    g=room.get('game')
+    if not g or g['phase'] not in ('playing','meeting') or not player.get('alive',True):return
+    need=g['questionsPerTag']
+    if player.get('role')=='impostor':
+        before=player.get('tagCharge',0);player['tagCharge']=min(5,before+1)
+        if before<need<=player['tagCharge']:notify(player,'⚡ Tag powered up! Find an isolated crewmate.')
+        return
+    if set(player.get('roundTasks',[]))<=set(player.get('roundDone',[])) and player.get('shield',0)<MAX_SHIELDS:
+        player['shield']=player.get('shield',0)+1
+        notify(player,f'🛡️ Bonus chat complete! Shield ready ({player["shield"]}/{MAX_SHIELDS}). It blocks one tag attempt.')
+
 def meeting(room,caller,reason):
+    # Meetings never interrupt a conversation: players keep chatting and vote between chats.
     g=room['game'];now=time.time()
-    for p in room['players'].values():park(p)
     g['meeting']={'id':secrets.token_hex(8),'caller':caller['name'],'reason':reason,'started':now,
                   'voteOpensAt':now+g['discussionSeconds'],'endsAt':now+g['discussionSeconds']+g['voteSeconds'],'votes':{},'messages':[],'botSpoke':[]}
     g['phase']='meeting'
@@ -147,6 +166,7 @@ def action(room,player,data,walls):
         if g['phase']!='meeting' or data.get('meeting')!=g['meeting']['id']:raise SocialError('This meeting has ended.')
         m=g['meeting']
         if not player.get('alive',True):raise SocialError('Ghosts can observe meetings, but cannot vote.')
+        if player.get('active'):raise SocialError('Finish or leave your current chat, then cast your vote. Your chat is saved.')
         if now<m['voteOpensAt']:raise SocialError('Discuss what you saw first. Voting opens shortly.')
         choice=str(data.get('target','skip'))
         if choice!='skip' and (choice not in room['players'] or not room['players'][choice].get('alive',True)):raise SocialError('Choose a living player or Skip.')
@@ -158,9 +178,17 @@ def action(room,player,data,walls):
         if player.get('role')!='impostor':raise SocialError('Only impostors can tag players out.')
         if player.get('active'):raise SocialError('Leave your conversation before tagging someone.')
         if now<player.get('killReadyAt',0):raise SocialError('Your tag cooldown is still running.')
+        need=g['questionsPerTag'];charge=player.get('tagCharge',0)
+        if charge<need:raise SocialError(f'Power up your tag: finish {need-charge} more science conversation(s) first.')
         target=room['players'].get(str(data.get('target','')))
         if not target or target['id']==player['id'] or not target.get('alive',True) or target.get('role')!='crew':raise SocialError('Choose a nearby living crewmate.')
         if not near(player,target,85,walls):raise SocialError('Get closer with a clear path to tag this crewmate.')
+        player['tagCharge']=max(0,charge-need)
+        if target.get('shield',0)>0:
+            target['shield']-=1;player['killReadyAt']=now+KILL_COOLDOWN/2
+            notify(target,'🛡️ Your shield blocked a tag attempt! Someone nearby is the impostor. Remember who was close.')
+            notify(player,'🛡️ That crewmate had a shield. Your tag was blocked.')
+            return
         for witness in room['players'].values():
             if witness.get('bot') and witness.get('alive',True) and witness['id'] not in (player['id'],target['id']) and near(witness,player,230,walls):witness['botSuspect']=player['id']
         target['alive']=False;g['bodies'].append({'id':target['id'],'name':target['name'],'x':target['x'],'y':target['y']})
@@ -199,7 +227,7 @@ def record_task(room,player,qid):
 
 def public(room):
     g=room['game'];now=time.time();done,total=task_counts(room)
-    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','lastMeeting','nextMeetingAt','nextSabotageAt','writtenDiscussion')}
+    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','lastMeeting','nextMeetingAt','nextSabotageAt','writtenDiscussion','questionsPerTag')}
     result.update(botPractice=bool(room.get('botPractice')),serverNow=now,crewTasksDone=done,crewTasksTotal=total,minimumPlayers=g['impostorCount']*3+1)
     result['sabotage']=g['sabotage']
     m=g.get('meeting');result['meeting']=None
@@ -212,7 +240,7 @@ def public(room):
 
 def private(room,player):
     if not room.get('game'):return {}
-    g=room['game'];m=g.get('meeting');extra={'yourVote':m['votes'].get(player['id']) if m else None}
+    g=room['game'];m=g.get('meeting');extra={'yourVote':m['votes'].get(player['id']) if m else None,'notices':player.get('notices',[]),'tagCharge':player.get('tagCharge',0),'shield':player.get('shield',0)}
     if player.get('role')=='impostor':extra['partners']=[{'id':p['id'],'name':p['name']} for p in room['players'].values() if p.get('role')=='impostor' and p['id']!=player['id']]
     return extra
 
@@ -276,12 +304,17 @@ def bot_tick(room):
         if p.get('role')=='impostor' and p.get('alive',True):
             targets=[t for t in room['players'].values() if t.get('alive',True) and t.get('role')=='crew']
             if targets and now>=p.get('killReadyAt',0):
-                t=min(targets,key=lambda t:math.dist((p['x'],p['y']),(t['x'],t['y'])))
-                if near(p,t,85,BOT_WALLS):
-                    action(room,p,{'action':'tag','target':t['id']},BOT_WALLS);changed=True
-                else:bot_walk(p,(t['x'],t['y']),dt)
-                if g['phase']!='playing':break
-                continue
+                if p.get('tagCharge',0)<g['questionsPerTag']:
+                    # Bots "study" for a while to power up their tag, like a human impostor must.
+                    if not p.get('botChargeAt'):p['botChargeAt']=now+15+secrets.randbelow(15)
+                    elif now>=p['botChargeAt']:p['tagCharge']=p.get('tagCharge',0)+1;p['botChargeAt']=0;changed=True
+                else:
+                    t=min(targets,key=lambda t:math.dist((p['x'],p['y']),(t['x'],t['y'])))
+                    if near(p,t,85,BOT_WALLS):
+                        action(room,p,{'action':'tag','target':t['id']},BOT_WALLS);changed=True
+                    else:bot_walk(p,(t['x'],t['y']),dt)
+                    if g['phase']!='playing':break
+                    continue
             if now>=g.get('nextSabotageAt',0) and not g.get('sabotage'):
                 action(room,p,{'action':'sabotage'},BOT_WALLS);changed=True
         if g.get('sabotage') and p.get('alive',True) and p.get('role')!='impostor':
