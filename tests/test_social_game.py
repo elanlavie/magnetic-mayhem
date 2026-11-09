@@ -73,6 +73,12 @@ class SocialTests(unittest.TestCase):
         self.assertEqual(self.g['phase'],'playing');self.assertGreater(self.g['nextMeetingAt'],time.time()+200)  # nobody tagged: skipped, timer restarts
         self.g['tagsSinceMeeting']=1;self.g['nextMeetingAt']=time.time()-1;game.dispatch('/api/state',self.auth[self.crew[0]['id']])
         self.assertEqual(self.g['phase'],'meeting')
+    def test_meeting_interrupts_chats_by_default_and_saves_them(self):
+        self.assertTrue(self.g['interruptChats'])
+        p=self.crew[1];i=int(p['roundTasks'][0].split(':')[0]);p.update(x=game.POSITIONS[i][0],y=game.POSITIONS[i][1]);game.dispatch('/api/start',{**self.auth[p['id']],'topic':i});self.assertIsNotNone(p['active'])
+        m=self.open_meeting();self.assertIsNone(p['active']);self.assertIn(str(i),p['conversations']);self.assertEqual((p['x'],p['y']),(800,460))
+        with self.assertRaises(game.GameError):game.dispatch('/api/start',{**self.auth[p['id']],'topic':i})  # no new chats during a meeting
+        self.act(p,'vote',meeting=m,target='skip')  # votes right away, no chat to finish
     def test_meeting_frequency_is_a_teacher_option(self):
         self.assertEqual(self.g['meetingSeconds'],240)
         h=game.dispatch('/api/create',{'mode':'infiltration','teacherKey':'teacher-test','meetingSeconds':120});self.assertEqual(game.ROOMS[h['code']]['game']['meetingSeconds'],120)
@@ -106,8 +112,8 @@ class SocialTests(unittest.TestCase):
         for p in self.crew:
             for qid in p['roundTasks']:social.record_task(self.room,p,qid)
         self.assertEqual(self.g['winner'],'crew')
-    def test_meeting_does_not_interrupt_chat_and_vote_waits_for_chat_end(self):
-        p=self.crew[1];i=int(p['roundTasks'][0].split(':')[0]);p.update(x=game.POSITIONS[i][0],y=game.POSITIONS[i][1]);game.dispatch('/api/start',{**self.auth[p['id']],'topic':i})
+    def test_async_meeting_does_not_interrupt_chat_and_vote_waits_for_chat_end(self):
+        self.g['interruptChats']=False;p=self.crew[1];i=int(p['roundTasks'][0].split(':')[0]);p.update(x=game.POSITIONS[i][0],y=game.POSITIONS[i][1]);game.dispatch('/api/start',{**self.auth[p['id']],'topic':i})
         m=self.open_meeting();self.assertIsNotNone(p['active'])
         with self.assertRaises(game.GameError):self.act(p,'vote',meeting=m,target='skip')
         game.dispatch('/api/leave',self.auth[p['id']]);self.act(p,'vote',meeting=m,target='skip');self.assertEqual(self.g['meeting']['votes'][p['id']],[])

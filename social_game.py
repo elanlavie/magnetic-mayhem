@@ -21,6 +21,7 @@ def configure(room,options):
                   'tasksPerCrew':max(1,min(7,int(options.get('tasksPerCrew',5)))),
                   'roundSeconds':(0 if not int(options.get('roundSeconds',0) or 0) else max(120,min(3600,int(options['roundSeconds'])))),'crewTargetPct':max(50,min(100,int(options.get('crewTargetPct',80)))),'roundEndsAt':0,
                   'meetingSeconds':(0 if int(options.get('meetingSeconds',240) or 0)==0 else max(60,min(900,int(options.get('meetingSeconds',240))))),
+                  'interruptChats':bool(options.get('interruptChats',True)),
                   'discussionSeconds':max(15,min(180,int(options.get('discussionSeconds',30)))),
                   'voteSeconds':max(15,min(300,int(options.get('voteSeconds',90)))),
                   'questionsPerTag':1,
@@ -186,6 +187,11 @@ def meeting(room,caller,reason):
     g['meeting']={'id':secrets.token_hex(8),'caller':'The station','needed':max(2,min(g['impostorCount']+1,len(living)//2+1)),'reason':reason,'started':now,
                   'voteOpensAt':now+g['discussionSeconds'],'endsAt':now+g['discussionSeconds']+g['voteSeconds'],'votes':{},'messages':[],'botSpoke':[]}
     g['phase']='meeting';g['meetingCount']=g.get('meetingCount',0)+1
+    if g.get('interruptChats',True):
+        # In-person style: everyone stops, chats are saved, and the class gathers at the pad to talk and vote together.
+        for p in room['players'].values():
+            if p.get('active'):p.setdefault('conversations',{})[str(p['active']['topic'])]=p['active'];p['active']=None
+            p.update(x=800,y=460)
 
 def action(room,player,data,walls):
     g=room['game']
@@ -253,7 +259,7 @@ def record_task(room,player,qid):
 
 def public(room):
     g=room['game'];now=time.time();done,total=task_counts(room)
-    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','lastMeeting','nextMeetingAt','meetingSeconds','writtenDiscussion','questionsPerTag','roundSeconds','crewTargetPct','roundEndsAt')}
+    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','lastMeeting','nextMeetingAt','meetingSeconds','interruptChats','writtenDiscussion','questionsPerTag','roundSeconds','crewTargetPct','roundEndsAt')}
     result['summary']=g.get('summary') if g['phase']=='ended' else None;result['crewPenalty']=g.get('penalty',0)
     result.update(botPractice=bool(room.get('botPractice')),serverNow=now,crewTasksDone=done,crewTasksTotal=total,crewTasksTarget=target_for(room,total) if total else 0,minimumPlayers=MIN_PLAYERS,impostorsIfStartedNow=impostors_for(len(room['players'])))
     m=g.get('meeting');result['meeting']=None
