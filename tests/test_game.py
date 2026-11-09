@@ -12,7 +12,7 @@ class GameTests(unittest.TestCase):
         self.ai_patch=patch.object(game,'ai',side_effect=self.fake_ai);self.ai_patch.start()
         self.created=game.dispatch('/api/create',{'mode':'coop','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
         self.auth={'code':self.created['code']}
-        j=game.dispatch('/api/join',{**self.auth,'name':'Ada'}); self.auth['token']=j['token']; self.p=game.ROOMS[self.auth['code']]['players'][j['player']['id']]
+        j=game.dispatch('/api/join',{**self.auth,'name':'Ada'}); self.auth['token']=j['token']; self.p=game.ROOMS[self.auth['code']]['players'][j['player']['id']]; self.p['cells']=0  # tests count cells from zero; real players start with 2
     def tearDown(self): self.ai_patch.stop(); game.KEY=self.oldkey; game.TEACHER_KEY=self.oldteacher; self.temp.cleanup()
     @staticmethod
     def fake_ai(system,data,max_tokens=650):
@@ -24,13 +24,15 @@ class GameTests(unittest.TestCase):
         self.p['x'],self.p['y']=game.POSITIONS[topic]
         return game.dispatch('/api/start',{**self.auth,'topic':topic})['player']['active']
     def chat(self,text='',kind='answer',rid=None):
+        if kind=='hint' and not self.p['cells']:self.p['cells']=1  # a hint spends one ⚡ cell
         return game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':rid or str(uuid.uuid4()),'kind':kind,'text':text})
     def test_public_state_hides_keys_and_answers(self):
         r=game.dispatch('/api/state',self.auth); text=json.dumps(r['room']);self.assertNotIn(self.auth['token'],text);self.assertNotIn(self.created['host'],text);self.assertNotIn('terms',text);self.assertNotIn('questions',text)
     def ans(self):
         a=self.p['active'];return game.BUILTIN['topics'][a['topic']]['questions'][a['index']]['answer']
-    def test_hint_is_free(self):
-        self.start();self.chat(kind='hint');self.assertEqual(self.p['active']['attempts'],0)
+    def test_hint_costs_a_cell_but_no_attempt(self):
+        self.start();self.p['cells']=1;self.chat(kind='hint');self.assertEqual(self.p['active']['attempts'],0);self.assertEqual(self.p['cells'],0)
+        with self.assertRaises(game.GameError):game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':'x2','kind':'hint','text':''})
     def test_short_answer_prompts_reasoning_free(self):
         self.start();self.chat('yes');self.assertEqual(self.p['active']['attempts'],0)
     def test_success_and_duplicate_request(self):
@@ -55,10 +57,15 @@ class GameTests(unittest.TestCase):
         self.p['x'],self.p['y']=game.POSITIONS[0];self.p['cells']=3
         with self.assertRaises(game.GameError):game.dispatch('/api/repair',{**self.auth,'topic':0})
     def test_cells_not_duplicated(self):
-        self.p['x'],self.p['y']=game.cell_positions()[0]
-        game.dispatch('/api/cell',{**self.auth,'cell':0});game.dispatch('/api/cell',{**self.auth,'cell':0});self.assertEqual(self.p['cells'],1)
+        game.cell_pool(game.ROOMS[self.auth['code']]);cell=game.ROOMS[self.auth['code']]['cellPool']['active'][0];self.p['x'],self.p['y']=game.cell_positions()[cell]
+        game.dispatch('/api/cell',{**self.auth,'cell':cell});game.dispatch('/api/cell',{**self.auth,'cell':cell});self.assertEqual(self.p['cells'],1)
+        self.assertNotIn(cell,game.ROOMS[self.auth['code']]['cellPool']['active'])  # taken until it respawns
+    def test_cells_scale_with_players_and_hints_cost_one(self):
+        r=game.ROOMS[self.auth['code']];self.assertEqual(len(game.cell_pool(r)),3)
+        for n in range(11):r['players'][f'p{n}']={**self.p,'id':f'p{n}'}
+        self.assertEqual(len(game.cell_pool(r)),9)  # 12 players: 9 cells, about 3 per 4 players
     def test_repair_rewards_teammate_once(self):
-        j=game.dispatch('/api/join',{'code':self.auth['code'],'name':'Grace'});other=game.ROOMS[self.auth['code']]['players'][j['player']['id']]
+        j=game.dispatch('/api/join',{'code':self.auth['code'],'name':'Grace'});other=game.ROOMS[self.auth['code']]['players'][j['player']['id']];other['cells']=0
         self.p['completed']=['0:0','0:1'];self.p['cells']=2;self.p['x'],self.p['y']=game.POSITIONS[0]
         game.dispatch('/api/repair',{**self.auth,'topic':0});game.dispatch('/api/repair',{**self.auth,'topic':0});self.assertEqual(other['cells'],1);self.assertEqual(self.p['cells'],0)
     def test_teacher_pause(self):
@@ -260,7 +267,7 @@ class MoreTimeTests(unittest.TestCase):
                 pack={'title':'T','topics':[{'name':'A','questions':[{'prompt':'Why?','answer':'a','hint':'h'}]}]}
                 c=game.dispatch('/api/create',{'mode':'coop','pack':pack,'teacherKey':'tk'})
                 j=game.dispatch('/api/join',{'code':c['code'],'name':'Ada'});auth={'code':c['code'],'token':j['token']}
-                p=game.ROOMS[c['code']]['players'][j['player']['id']];p['x'],p['y']=game.POSITIONS[0]
+                p=game.ROOMS[c['code']]['players'][j['player']['id']];p['x'],p['y']=game.POSITIONS[0];p['cells']=0
                 a=game.dispatch('/api/start',{**auth,'topic':0})['player']['active']
                 with self.assertRaises(game.GameError): game.dispatch('/api/moretime',{**auth,'challenge':a['id']})
                 p['cells']=2

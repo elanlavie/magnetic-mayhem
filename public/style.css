@@ -65,3 +65,9 @@
 .brief-card{width:min(760px,100%);max-height:78dvh;overflow:auto;padding:26px 32px;border-radius:22px;background:#2c1b16;border:3px solid #8fe0c2;box-shadow:0 0 80px #0009}.brief-card.impostor{border-color:#ff7b82}.brief-role{font-size:34px;font-weight:800;margin-bottom:8px}.brief-card.impostor .brief-role{color:#ff9aa0}.brief-card.crew .brief-role{color:#8fe0c2}
 .brief-card h3{margin:16px 0 4px;font-size:18px}.brief-card p,.brief-card li{font-size:16px;line-height:1.5}.brief-card ul,.brief-card ol{margin:4px 0;padding-left:22px}.brief-card kbd{padding:1px 7px;border:1px solid #725b52;border-radius:6px;background:#3a2c27;font-size:14px}
 .tag-prompt{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:15;padding:12px 22px;border-radius:99px;background:#ff5a64;color:#fff;font-weight:800;font-size:20px;box-shadow:0 0 30px #ff5a6488;pointer-events:none}
+
+.brief-top .brief-head{display:flex;align-items:center;justify-content:space-between;gap:14px}.brief-top .primary small{opacity:.8;font-weight:400}
+.cell-row{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:8px 0;padding:8px 12px;border:1px solid #725b52;border-radius:12px;background:#3a2c27;font-size:13px}.cells-big{font-size:18px;font-weight:800;color:#ffd23f}.cells-big.tags{color:#ff9aa0}
+.enc-cells{margin-left:12px;color:#ffd23f;font-weight:700}
+.vote-row{padding:12px 16px;border-radius:12px;font-size:20px}.vote-row.bad{background:#46201f;border:2px solid #ff7b82}.vote-row.ok{background:#1f3a31;border:2px solid #8fe0c2}.vote-left{font-size:22px;font-weight:800;color:#ffb591;margin:14px 0 4px}
+.tag-prompt.wait{background:#2c1b16;border:2px solid #8fe0c2;color:#cdf5e6;box-shadow:none;font-size:17px}

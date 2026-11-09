@@ -55,6 +55,7 @@ class SocialTests(unittest.TestCase):
         for p in self.crew:self.act(p,'vote',meeting=meeting,target=self.imp['id'])
         self.act(self.imp,'vote',meeting=meeting,target='skip')
         self.assertEqual(self.g['winner'],'crew');self.assertFalse(self.imp['alive']);self.assertIn('revealedRoles',social.public(self.room))
+        lm=self.g['lastMeeting'];self.assertEqual(lm['results'],[{'name':self.imp['name'],'wasImpostor':True}]);self.assertEqual(lm['impostorsLeft'],0);self.assertIn('WAS an impostor',lm['message']);self.assertEqual(social.public(self.room)['impostorsLeft'],0)
     def test_ties_and_missing_ballots_skip(self):
         meeting=self.open_meeting();self.act(self.imp,'vote',meeting=meeting,target=self.crew[0]['id']);self.act(self.crew[0],'vote',meeting=meeting,target=self.imp['id']);self.g['meeting']['endsAt']=time.time()-1
         game.dispatch('/api/state',self.auth[self.crew[1]['id']]);self.assertTrue(all(p['alive'] for p in self.room['players'].values()));self.assertEqual(self.g['lastMeeting']['ejected'],[])
@@ -88,6 +89,18 @@ class SocialTests(unittest.TestCase):
         self.assertTrue(all(p['role'] in ('crew','impostor') for p in r['players'].values()))  # roles already assigned for the briefing
         g['briefingEndsAt']=time.time()-1;game.dispatch('/api/state',ids[0])
         self.assertEqual(g['phase'],'playing');self.assertGreater(g['roundEndsAt'],time.time()+500)  # the 10-minute timer starts only now
+    def test_wrongly_ejected_crew_is_revealed_as_not_an_impostor(self):
+        m=self.open_meeting()
+        for p in (self.imp,self.crew[1]):self.act(p,'vote',meeting=m,targets=[self.crew[0]['id']])
+        self.g['meeting']['endsAt']=time.time()-1;game.dispatch('/api/state',self.auth[self.crew[1]['id']])
+        lm=self.g['lastMeeting'];self.assertEqual(lm['results'],[{'name':self.crew[0]['name'],'wasImpostor':False}]);self.assertEqual(lm['impostorsLeft'],1);self.assertIn('NOT an impostor',lm['message']);self.assertIn('1 impostor left',lm['message'])
+    def test_everyone_skipping_the_briefing_starts_the_round_early(self):
+        h=game.dispatch('/api/create',{'mode':'infiltration','teacherKey':'teacher-test','impostors':1,'tasksPerCrew':2,'briefingSeconds':60});ids=[]
+        for n in 'ABCD':d=game.dispatch('/api/join',{'code':h['code'],'name':n});ids.append({'code':h['code'],'token':d['token']})
+        game.dispatch('/api/host',{**h,'action':'startRound'});r=game.ROOMS[h['code']];g=r['game']
+        for a in ids[:3]:game.dispatch('/api/round',{**a,'action':'ready'})
+        self.assertEqual(g['phase'],'briefing');self.assertEqual((social.public(r)['briefReady'],social.public(r)['briefHumans']),(3,4))
+        game.dispatch('/api/round',{**ids[3],'action':'ready'});self.assertEqual(g['phase'],'playing')
     def test_meeting_frequency_is_a_teacher_option(self):
         self.assertEqual(self.g['meetingSeconds'],240)
         h=game.dispatch('/api/create',{'mode':'infiltration','teacherKey':'teacher-test','meetingSeconds':120});self.assertEqual(game.ROOMS[h['code']]['game']['meetingSeconds'],120)
