@@ -186,3 +186,14 @@ class ThinkTimeTests(unittest.TestCase):
         self.assertEqual(game.think_seconds({'prompt': 'x', 'seconds': 'bad'}), game.think_seconds({'prompt': 'x'}))
 
 if __name__=='__main__':unittest.main()
+
+
+class MediaPackTests(unittest.TestCase):
+    def test_safe_url(self):
+        self.assertEqual(game.safe_url('https://phet.colorado.edu/x'),'https://phet.colorado.edu/x')
+        for bad in ('http://x.com/a','javascript:alert(1)','https://a b.com',''):
+            self.assertEqual(game.safe_url(bad),'')
+    def test_pack_keeps_only_https_media(self):
+        p=game.validate_pack({'title':'T','topics':[{'name':'A','sim':{'url':'http://bad.com/x'},'questions':[{'prompt':'Why?','answer':'Because reasons here.','hint':'Think.','image':'javascript:1'}]},{'name':'B','sim':{'url':'https://ok.org/s','title':'S'},'questions':[{'prompt':'Why2?','answer':'Because reasons here.','hint':'Think.','image':'https://ok.org/i.png'}]}]})
+        self.assertNotIn('sim',p['topics'][0]);self.assertNotIn('image',p['topics'][0]['questions'][0])
+        self.assertEqual(p['topics'][1]['sim']['url'],'https://ok.org/s');self.assertEqual(p['topics'][1]['questions'][0]['image'],'https://ok.org/i.png')

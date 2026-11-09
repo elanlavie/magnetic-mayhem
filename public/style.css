@@ -32,3 +32,7 @@
 #timeup button{margin-left:8px}
 
 .rec{background:#5a2330!important;border-color:#ffa9b5!important}#assist-box textarea{margin-top:10px}
+
+.qimg{display:block;max-width:100%;max-height:220px;margin:0 auto 10px;border-radius:10px;background:#fff}
+.mm-sim,.mm-img{width:100%;margin-top:6px;font-size:.85rem}
+.media-box{margin-top:14px;padding:12px;border:1px dashed var(--line,#456);border-radius:12px}
