@@ -57,7 +57,7 @@ const Classes=(()=>{
   const alertId=new URLSearchParams(location.search).get('alert');
   if(alertId&&user.role==='teacher'){history.replaceState(null,'',location.pathname);openAlert(alertId)}
   populateClassPick();
-  if(user.role==='teacher'){libMount();materialMount()}
+  if(user.role==='teacher'){packsMount();libMount();materialMount()}
  }
 
  // ---------- teacher / student class screen
@@ -124,6 +124,24 @@ const Classes=(()=>{
   document.getElementById('lib-subjects').innerHTML=Object.entries(tags).map(([k,n])=>`<label class="check"><input type="checkbox" class="lib-subject" value="${esc(k)}"> ${esc(k)} <span class="muted">(${n})</span></label>`).join('');
   document.getElementById('lib-build').disabled=!picked.length;
  }
+
+ // ---------- saved games: build once, reuse for any class or for solo practice
+ let savedId=null,savedList=[];
+ async function packsLoad(){try{savedList=(await call('/api/pack/list')).packs}catch{savedList=[]}packsRender()}
+ function packsRender(){const box=document.getElementById('saved-list');if(!box)return;
+  box.innerHTML=savedList.length?savedList.map(p=>`<div class="saved-row" data-id="${esc(p.id)}"><div><b>${esc(p.title)}</b> <span class="muted">${p.questions} questions · ${p.topics} topics</span><div class="hint-text">${p.classes.length?'Assigned to: '+p.classes.map(c=>esc(c.name)).join(', '):'Not assigned to a class yet'}</div></div><div class="toolbar"><button type="button" class="small" data-act="load">Use this game</button><button type="button" class="small" data-act="assign">Classes…</button><button type="button" class="small danger" data-act="del">Delete</button></div><div class="assign hidden">${classes.map(c=>`<label class="check"><input type="checkbox" value="${esc(c.id)}" ${p.classes.some(x=>x.id===c.id)?'checked':''}> ${esc(c.name)}</label>`).join('')||'<span class="muted">Create a class first.</span>'}<button type="button" class="small primary" data-act="saveassign">Save</button></div></div>`).join(''):'<p class="hint-text">Nothing saved yet. Games you create are saved here automatically.</p>';
+  box.querySelectorAll('.saved-row').forEach(row=>{const id=row.dataset.id,p=savedList.find(x=>x.id===id);
+   row.querySelector('[data-act=load]').onclick=async()=>{try{const r=await call('/api/pack/get',{id});pack=r.pack;savedId=id;preview();toast('Loaded “'+p.title+'”. Pick your settings and create the game.');document.getElementById('packtitle').scrollIntoView({behavior:'smooth'})}catch(e){toast(e.message)}};
+   row.querySelector('[data-act=assign]').onclick=()=>row.querySelector('.assign').classList.toggle('hidden');
+   row.querySelector('[data-act=saveassign]').onclick=async()=>{try{await call('/api/pack/assign',{id,classIds:[...row.querySelectorAll('.assign input:checked')].map(i=>i.value)});toast('Saved. Students in those classes can now play it on their own.');packsLoad()}catch(e){toast(e.message)}};
+   row.querySelector('[data-act=del]').onclick=async()=>{if(!confirm('Delete “'+p.title+'”? Students lose access to it.'))return;try{await call('/api/pack/delete',{id});if(savedId===id)savedId=null;packsLoad()}catch(e){toast(e.message)}}})}
+ function packsMount(){
+  if(document.getElementById('savedbox'))return;
+  document.getElementById('packtitle').insertAdjacentHTML('beforebegin','<details id="savedbox" class="lib-box" open><summary>🗂️ My saved games <span class="muted">(build once, reuse anywhere)</span></summary><div id="saved-list"></div></details>');
+  packsLoad()}
+ // Save (or update) the current pack. Returns its id so a room or solo game can be created from it.
+ async function savePack(){if(!pack)return null;try{const r=await call('/api/pack/save',{pack,id:savedId||undefined});savedId=r.id;packsLoad();return r.id}catch(e){if(savedId){savedId=null;return savePack()}return null}}
+ function resetSaved(){savedId=null}
  function libMount(){
   if(document.getElementById('libbox'))return;
   const anchor=document.getElementById('packtitle');
@@ -133,7 +151,7 @@ const Classes=(()=>{
    <h3>Add to library</h3><p class="hint-text">Import a test or study guide (TXT, PDF, DOCX) or paste it. Multiple-choice questions become "explain your reasoning" questions, each tagged by topic.</p>
    <div class="toolbar"><label class="file-label small">Choose file<input id="lib-file" type="file" accept=".txt,.md,.pdf,.docx" hidden></label><span id="lib-note" class="muted"></span></div>
    <textarea id="lib-text" rows="5" placeholder="Or paste the questions here"></textarea><button id="lib-import" class="primary small">Add to my library</button></details>`);
-  document.getElementById('lib-build').onclick=async()=>{
+  document.getElementById('lib-build').onclick=async()=>{resetSaved();
    const ids=[...document.querySelectorAll('.lib-pick:checked')].map(i=>i.value),subjects=[...document.querySelectorAll('.lib-subject:checked')].map(i=>i.value);
    try{const r=await call('/api/library/pack',{ids,subjects,title:subjects.length?subjects.join(' & ')+' mission':undefined});pack=r.pack;preview();toast('Mission built from your library. Review it below, then create the room.')}catch(e){toast(e.message)}};
   document.getElementById('lib-file').onchange=async e=>{
@@ -207,7 +225,7 @@ const Classes=(()=>{
   if(!token())return signInScreen();
   try{const r=await call('/api/auth/me');user=r.user;classes=r.classes;afterSignIn()}catch{needSignIn('Your session ended. Please sign in again.')}
  }
- return {init,token,dictation,needSignIn,classId,firstClass,prepareSetup,get user(){return user},get classes(){return classes}};
+ return {init,token,dictation,savePack,resetSaved,packsLoad,needSignIn,classId,firstClass,prepareSetup,get user(){return user},get classes(){return classes}};
 })();
 
 window.Classes=Classes;

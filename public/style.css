@@ -47,3 +47,5 @@
 @media(max-width:600px){.choices{grid-template-columns:1fr}}
 
 .gamelog{margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#1a100c}.gamelog h3{margin:0 0 6px;font-size:12px;letter-spacing:1px;color:var(--muted)}.gamelog ul{list-style:none;margin:0;padding:0;max-height:180px;overflow-y:auto;font-size:12px;line-height:1.5}.gamelog li{padding:3px 0;border-top:1px solid #ffffff10}.gamelog li small{color:var(--muted);margin-right:6px}
+
+.saved-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)}.saved-row .assign{flex-basis:100%;padding:6px 0}.saved-row .assign.hidden{display:none}.small.danger{border-color:#ff7a7a;color:#ffb3b3}
