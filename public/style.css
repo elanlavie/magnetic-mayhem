@@ -14,3 +14,10 @@
 .social-panel{position:sticky;top:8px;z-index:12;box-shadow:0 8px 25px #080c1acc}
 
 .meeting-banner{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:10px;padding:10px 14px;border:1px solid #f9bb7b;border-radius:12px;background:#3a2c27;color:#ffe2c2;font-size:14px}.status-row{margin-top:10px;font-size:13px;color:#c8baff}#ballot-later{margin-top:12px}
+
+.account{display:flex;align-items:center;gap:8px;margin-right:8px}.account .who{font-size:11px;color:var(--text);letter-spacing:0;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.modal-card.wide{max-width:960px}.plain{padding-left:18px;line-height:1.9}.notice{color:#ffd275}
+.class-card{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 0;border-bottom:1px solid var(--line)}
+.rrow{display:grid;grid-template-columns:1.4fr 1fr .6fr 1.1fr auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);font-size:12px}.rrow.removed{opacity:.55}.rrow .toolbar{margin:0}
+.flag{color:#ffa9b5}.info-box.alerts{border-color:#ffa9b555;background:#ffa9b510}.alert-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:12px}
+@media(max-width:700px){.rrow{grid-template-columns:1fr 1fr}.account .who{display:none}}

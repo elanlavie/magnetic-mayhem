@@ -95,6 +95,10 @@ players can participate. Solo exploration remains available as a separate choice
 The tutor also occasionally uses “Let the equation guide your thinking!”,
 “Yum Fysicz!”, and “Good Energy!” where they fit.
 
+## 🏫 Classes, sign-in and safety
+
+With `AUTH_MODE=classes`, students and teachers sign in with Google. Teachers create classes (restricted to student email domains), share expiring invite links, and can read every chat in their classes. Each student gets a class nickname: the AI suggests one from the Google name, the teacher edits and saves it, and future sign-ins use it. For each game the teacher chooses real class nicknames or anonymous fun names (only the teacher can see who is who). Messages about self-harm, harm to others or inappropriate language raise an alert (tutor classification plus a keyword backstop) shown on the teacher dashboard and emailed with a link to the chat. See DEPLOY.md.
+
 ## Hosting
 
 Run a single instance behind HTTPS. The included `render.yaml` proposes one paid Python service with a 1 GB persistent disk. The existing production service is at https://magnetic-mayhem.onrender.com/. GitHub source: https://github.com/elanlavie/magnetic-mayhem.
