@@ -76,3 +76,7 @@
 
 .brief-reveal{gap:6px;width:min(380px,100%);padding:18px 20px;border-width:2px;border-radius:16px}.brief-reveal span{font-size:34px}.brief-reveal b{font-size:19px}.brief-reveal small{font-size:13px}
 .brief-role{font-size:22px}
+
+/* phones: the chat is never hidden; the simulation opens full screen from a button */
+#simback{display:none}
+@media(max-width:900px){#encounter.with-sim .encounter-card{display:block!important}#simpanel{position:fixed!important;inset:0!important;top:0!important;bottom:0!important;width:100%!important;height:100dvh!important;border-radius:0!important;z-index:40!important}#simpanel.hidden{display:none!important}#simpanel:not(.hidden){display:flex!important}#simback{display:inline-flex}}
