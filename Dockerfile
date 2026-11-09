@@ -2,7 +2,7 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY server.py .
+COPY server.py social_game.py ./
 COPY public ./public
 RUN useradd --create-home game && mkdir /data && chown game /data
 USER game
