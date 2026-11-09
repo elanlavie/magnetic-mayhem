@@ -56,3 +56,5 @@
 #simpanel{top:auto!important;bottom:4dvh!important}
 @media(max-width:900px){#encounter.with-sim .encounter-card{flex:1 1 100%!important;max-width:none!important}.sim-panel{display:none!important}}
 .chatlog{max-height:46dvh!important}
+
+.boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:12px 0}.board{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#1a100c}.board h3{margin:0 0 6px;font-size:13px}.board-row{display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:13px}.board-row.me{color:#ffd23f}
