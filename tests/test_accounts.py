@@ -291,7 +291,11 @@ class ClassTests(unittest.TestCase):
         saved = self.api('/api/pack/save', self.teacher, pack=pack)
         listed = self.api('/api/pack/list', self.teacher)['packs']
         self.assertEqual([p['title'] for p in listed], ['Circuits']);self.assertEqual(listed[0]['questions'], 1)
-        # not assigned yet: the student sees nothing and cannot play it
+        # a new pack is available to all of the teacher's classes by default, with no assigning needed
+        self.assertTrue(listed[0]['allClasses'])
+        self.assertEqual([p['title'] for p in self.api('/api/class/packs', self.alex, classId=self.cls['id'])['packs']], ['Circuits'])
+        # the teacher can hide it on purpose: then students see nothing and cannot play it
+        self.api('/api/pack/assign', self.teacher, id=saved['id'], classIds=[])
         self.assertEqual(self.api('/api/class/packs', self.alex, classId=self.cls['id'])['packs'], [])
         with self.assertRaises(accounts.AuthError): self.api('/api/create', self.alex, mode='solo', classId=self.cls['id'], packId=saved['id'])
         self.api('/api/pack/assign', self.teacher, id=saved['id'], classIds=[self.cls['id']])
