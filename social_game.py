@@ -365,8 +365,6 @@ def bot_tick(room):
                     if g['phase']!='playing':break
                     continue
             continue
-        bodies=[b for b in g.get('bodies',[]) if p.get('alive',True) and p.get('role')=='crew' and near(p,b,115,BOT_WALLS)]
-        if bodies:meeting(room,p,f'{p["name"]} reported {bodies[0]["name"]}. Discuss the evidence.');changed=True;break
         todo=[q for q in p.get('roundTasks',[]) if q not in p.get('roundDone',[])]
         if not todo:continue
         qid=todo[0];target=BOT_STATIONS[int(qid.split(':')[0])]
