@@ -30,3 +30,5 @@
 #encounter.with-sim{justify-content:flex-start}
 @media(max-width:900px){#simpanel{position:fixed;inset:0;width:100%;height:100dvh;border-radius:0}#encounter.with-sim .encounter-card{display:none}}
 #timeup button{margin-left:8px}
+
+.rec{background:#5a2330!important;border-color:#ffa9b5!important}#assist-box textarea{margin-top:10px}

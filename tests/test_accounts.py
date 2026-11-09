@@ -182,10 +182,26 @@ class ClassTests(unittest.TestCase):
         with self.assertRaises(accounts.AuthError): game.dispatch('/api/generate', {'userToken': self.alex, 'text': 'magnets'})
 
     def test_bot_practice_bots_do_not_inherit_the_students_identity(self):
-        room = game.dispatch('/api/create', {'userToken': self.alex, 'classId': self.cls['id'], 'mode': 'impostorSolo', 'soloRole': 'crew'})
+        with self.assertRaises(game.GameError): game.dispatch('/api/create', {'userToken': self.alex, 'classId': self.cls['id'], 'mode': 'impostorSolo', 'soloRole': 'crew', 'pack': copy.deepcopy(game.BUILTIN)})  # students cannot bring their own questions
+        teacher_room = self.make_room()
+        room = game.dispatch('/api/create', {'userToken': self.alex, 'classId': self.cls['id'], 'mode': 'impostorSolo', 'soloRole': 'crew', 'source': teacher_room['code']})
         first = self.join(self.alex, room['code']); again = self.join(self.alex, room['code'])
         self.assertEqual(first['token'], again['token'])
         self.assertEqual([p['name'] for p in game.ROOMS[room['code']]['players'].values() if p.get('email')], [first['player']['name']])
+
+    def test_classroom_has_no_builtin_questions_and_needs_a_pack(self):
+        self.assertIsNone(game.dispatch('/api/config', {})['builtin'])
+        with self.assertRaises(game.GameError): game.dispatch('/api/create', {'userToken': self.teacher, 'classId': self.cls['id'], 'mode': 'coop'})
+        accounts.MODE = 'off'
+        self.assertTrue(game.dispatch('/api/config', {})['builtin'])  # the open demo keeps its sample
+
+    def test_teacher_ai_helper_is_teacher_only_and_needs_a_message(self):
+        with patch.object(game, 'ai', side_effect=lambda s, d, m=650: {'reply': 'Which topics?'}) as fake:
+            r = game.dispatch('/api/assist', {'userToken': self.teacher, 'messages': [{'role': 'user', 'text': 'magnetism'}]})
+            self.assertEqual(r['reply'], 'Which topics?')
+            self.assertEqual(fake.call_args[0][1]['conversation'][0]['role'], 'teacher')
+            with self.assertRaises(accounts.AuthError): game.dispatch('/api/assist', {'userToken': self.alex, 'messages': [{'role': 'user', 'text': 'hi'}]})
+            with self.assertRaises(game.GameError): game.dispatch('/api/assist', {'userToken': self.teacher, 'messages': []})
 
     def test_classes_are_off_unless_enabled(self):
         accounts.MODE = 'off'
