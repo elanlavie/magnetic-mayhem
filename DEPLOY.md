@@ -1,30 +1,16 @@
-# Deployment proposal
+# Production deployment
 
-Use a personal GitHub repository connected to a single Render Python web service.
-The included render.yaml proposes paid compute and a 1 GB persistent disk.
-Review Render's current cost before applying it. No resources have been purchased.
+- Game: https://magnetic-mayhem.onrender.com/
+- Source: https://github.com/elanlavie/magnetic-mayhem
+- Render service: https://dashboard.render.com/web/srv-dboo7mvf3r2c73bqn0gg
+- Server: Python, one instance in Oregon, `python server.py`.
+- Build: `pip install -r requirements.txt`.
+- Health check: `/api/config`.
+- Disk: 1 GB at `/var/data`; `GAME_DB=/var/data/game.sqlite3`.
+- Model: `claude-sonnet-5-5`. No scripted tutor or AI-off option.
 
-1. Publish this folder's contents at the root of a personal GitHub repository.
-   Keep the repository private unless you want the source public.
-2. In Render, create a Blueprint from that repository and inspect the proposed cost.
-3. Enter ANTHROPIC_API_KEY in Render's secret environment settings, plus a private
-   TEACHER_KEY of your choosing. Do not put either value in GitHub or browser code.
-4. Deploy and check /api/config reports live and teacherProtected as true.
-5. Open Mission control, enter the teacher code, enable the live tutor, create a
-   small test room, and complete one real tutoring exchange. This incurs API usage.
-6. Restart the service and confirm the test room and player progress remain.
+Keep `ANTHROPIC_API_KEY` and `TEACHER_KEY` in Render's secret environment settings, never in GitHub. The API key created during setup expires December 9, 2026; replace it before that date. Funding and provider availability are required for live tutoring. If the API fails, attempts and progress remain intact.
 
-The selected model is claude-sonnet-5-5. The server already sends requests to the
-Claude Messages API with the appropriate Sonnet 5.5 thinking/effort settings.
-Live API access still needs an authorized key and a real request to verify it.
+The initial quoted hosting cost was $7/month compute plus $0.25/month disk, before API usage and any applicable additional charges. Review the current hosting invoice for actual charges.
 
-Keep one server instance: rooms are held in memory and saved to SQLite on disk.
-The deployment check is /api/config; the game itself is at the service root URL.
-The app does not load .env files. Hosting environment settings provide the values.
-
-This is a classroom pilot configuration. Live tutoring sends submitted curriculum
-and student explanations to Anthropic. Use nicknames and review the original
-README's hosting limits before student use.
-
-Verification on November 8, 2026: all 22 backend tests passed; app.js passed Node's
-syntax check. Live API access and hosted persistence have not yet been tested.
+A deployment restarts the single process. Saved rooms and progress load from SQLite. Back up SQLite using a consistent database backup rather than copying a file during a write. Never replace the production database with a local test database.
