@@ -17,7 +17,7 @@ class SocialTests(unittest.TestCase):
     def tearDown(self):game.DB,game.KEY,game.TEACHER_KEY=self.old;self.temp.cleanup()
     def act(self,p,action,**extra):return game.dispatch('/api/round',{**self.auth[p['id']],'action':action,**extra})
     def open_meeting(self):
-        self.g['nextMeetingAt']=0;self.act(self.crew[0],'emergency');self.g['meeting']['voteOpensAt']=time.time()-1
+        social.meeting(self.room,self.crew[0],'Test meeting');self.g['meeting']['voteOpensAt']=time.time()-1
         return self.g['meeting']['id']
     def test_role_assignments_and_task_counts(self):
         self.assertEqual(sum(p['role']=='impostor' for p in self.room['players'].values()),1)
@@ -52,19 +52,51 @@ class SocialTests(unittest.TestCase):
         before=social.task_counts(self.room);social.record_task(self.room,self.imp,self.imp['roundTasks'][0]);self.assertEqual(social.task_counts(self.room),before)
     def test_vote_unique_majority_ejects_impostor_and_crew_wins(self):
         meeting=self.open_meeting()
-        for p in self.room['players'].values():self.act(p,'vote',meeting=meeting,target=self.imp['id'])
+        for p in self.crew:self.act(p,'vote',meeting=meeting,target=self.imp['id'])
+        self.act(self.imp,'vote',meeting=meeting,target='skip')
         self.assertEqual(self.g['winner'],'crew');self.assertFalse(self.imp['alive']);self.assertIn('revealedRoles',social.public(self.room))
     def test_ties_and_missing_ballots_skip(self):
         meeting=self.open_meeting();self.act(self.imp,'vote',meeting=meeting,target=self.crew[0]['id']);self.act(self.crew[0],'vote',meeting=meeting,target=self.imp['id']);self.g['meeting']['endsAt']=time.time()-1
-        game.dispatch('/api/state',self.auth[self.crew[1]['id']]);self.assertTrue(all(p['alive'] for p in self.room['players'].values()));self.assertIsNone(self.g['lastMeeting']['ejected'])
+        game.dispatch('/api/state',self.auth[self.crew[1]['id']]);self.assertTrue(all(p['alive'] for p in self.room['players'].values()));self.assertEqual(self.g['lastMeeting']['ejected'],[])
     def test_duplicate_votes_do_not_count_twice_and_invalid_targets_fail(self):
         m=self.open_meeting()
         with self.assertRaises(game.GameError):self.act(self.crew[0],'vote',meeting=m,target='unknown')
-        self.act(self.crew[0],'vote',meeting=m,target='skip');self.act(self.crew[0],'vote',meeting=m,target=self.imp['id']);self.assertEqual(self.g['meeting']['votes'][self.crew[0]['id']],'skip')
+        self.act(self.crew[0],'vote',meeting=m,target='skip');self.act(self.crew[0],'vote',meeting=m,target=self.imp['id']);self.assertEqual(self.g['meeting']['votes'][self.crew[0]['id']],[])
     def test_meeting_discussion_timer_prevents_early_voting(self):
-        self.g['nextMeetingAt']=0;self.act(self.crew[0],'emergency');m=self.g['meeting']
+        social.meeting(self.room,self.crew[0],'Test meeting');m=self.g['meeting']
         with self.assertRaises(game.GameError):self.act(self.crew[0],'vote',meeting=m['id'],target='skip')
         self.assertTrue(game.dispatch('/api/move',{**self.auth[self.crew[1]['id']],'x':810,'y':460})['ok'])  # meetings never freeze movement
+    def test_no_emergency_or_report_and_scheduled_meeting_needs_a_tag(self):
+        for action in ('emergency','report'):
+            with self.assertRaises(game.GameError):self.act(self.crew[0],action,target='x')
+        self.g['nextMeetingAt']=time.time()-1;game.dispatch('/api/state',self.auth[self.crew[0]['id']])
+        self.assertEqual(self.g['phase'],'playing');self.assertGreater(self.g['nextMeetingAt'],time.time()+200)  # nobody tagged: skipped, timer restarts
+        self.g['tagsSinceMeeting']=1;self.g['nextMeetingAt']=time.time()-1;game.dispatch('/api/state',self.auth[self.crew[0]['id']])
+        self.assertEqual(self.g['phase'],'meeting')
+    def test_meeting_frequency_is_a_teacher_option(self):
+        self.assertEqual(self.g['meetingSeconds'],240)
+        h=game.dispatch('/api/create',{'mode':'infiltration','teacherKey':'teacher-test','meetingSeconds':120});self.assertEqual(game.ROOMS[h['code']]['game']['meetingSeconds'],120)
+        h=game.dispatch('/api/create',{'mode':'infiltration','teacherKey':'teacher-test','meetingSeconds':0});self.assertEqual(game.ROOMS[h['code']]['game']['meetingSeconds'],0)
+    def test_multi_vote_threshold_and_limits(self):
+        m=self.open_meeting();need=self.g['meeting']['needed'];self.assertEqual(need,2)
+        with self.assertRaises(game.GameError):self.act(self.crew[0],'vote',meeting=m,targets=[self.crew[0]['id']])  # not yourself
+        with self.assertRaises(game.GameError):self.act(self.crew[0],'vote',meeting=m,targets=[x['id'] for x in self.room['players'].values()][:4])
+        self.act(self.imp,'vote',meeting=m,targets=[self.crew[0]['id']])  # the impostor alone cannot reach the bar
+        self.act(self.crew[1],'vote',meeting=m,targets=[self.imp['id'],self.crew[2]['id']]);self.act(self.crew[2],'vote',meeting=m,targets=[self.imp['id']])
+        self.g['meeting']['endsAt']=time.time()-1;game.dispatch('/api/state',self.auth[self.crew[1]['id']])
+        self.assertEqual(self.g['lastMeeting']['ejected'],[self.imp['id']]);self.assertTrue(self.crew[0]['alive'] and self.crew[2]['alive'])
+    def test_at_most_three_ejected_and_ties_over_the_cap_stay(self):
+        for i in range(6):self.room['players'][f'x{i}']={**self.crew[0],'id':f'x{i}','alive':True,'role':'crew','name':f'X{i}'}
+        m=self.open_meeting();mt=self.g['meeting'];mt['needed']=2
+        cands=['x0','x1','x2','x3']
+        for n,v in enumerate([self.imp]+self.crew):mt['votes'][v['id']]=[c for k,c in enumerate(cands) if k!=n%4]
+        mt['endsAt']=time.time()-1;game.dispatch('/api/state',self.auth[self.crew[1]['id']]);self.assertEqual(self.g['lastMeeting']['ejected'],[])  # four-way tie over the cap: everyone stays
+    def test_top_three_ejected_when_clear(self):
+        for i in range(6):self.room['players'][f'x{i}']={**self.crew[0],'id':f'x{i}','alive':True,'role':'crew','name':f'X{i}'}
+        m=self.open_meeting();mt=self.g['meeting'];mt['needed']=2
+        for v in list(self.room['players'].values())[:6]:mt['votes'][v['id']]=[x for x in ('x0','x1','x2') if x!=v['id']]
+        for v in list(self.room['players'].values())[6:]:mt['votes'][v['id']]=['x0','x1','x3'] if v['id'] not in ('x0','x1','x3') else []
+        mt['endsAt']=time.time()-1;game.dispatch('/api/state',self.auth[self.crew[1]['id']]);self.assertEqual(len(self.g['lastMeeting']['ejected']),3)
     def test_parity_wins_and_tagged_players_are_hidden(self):
         for victim in self.crew[:2]:self.imp['killReadyAt']=0;self.imp['tagCharge']=2;self.act(self.imp,'tag',target=victim['id'])
         self.assertEqual(self.g['winner'],'impostors')
@@ -78,7 +110,7 @@ class SocialTests(unittest.TestCase):
         p=self.crew[1];i=int(p['roundTasks'][0].split(':')[0]);p.update(x=game.POSITIONS[i][0],y=game.POSITIONS[i][1]);game.dispatch('/api/start',{**self.auth[p['id']],'topic':i})
         m=self.open_meeting();self.assertIsNotNone(p['active'])
         with self.assertRaises(game.GameError):self.act(p,'vote',meeting=m,target='skip')
-        game.dispatch('/api/leave',self.auth[p['id']]);self.act(p,'vote',meeting=m,target='skip');self.assertEqual(self.g['meeting']['votes'][p['id']],'skip')
+        game.dispatch('/api/leave',self.auth[p['id']]);self.act(p,'vote',meeting=m,target='skip');self.assertEqual(self.g['meeting']['votes'][p['id']],[])
         game.dispatch('/api/host',{**self.host,'action':'pause'});self.g['pausedAt']-=20;old=self.g['meeting']['endsAt'];game.dispatch('/api/host',{**self.host,'action':'pause'});self.assertGreaterEqual(self.g['meeting']['endsAt'],old+19)
     def finish_chat(self,p,topic=None):
         """Complete one real conversation (Sonnet mocked) and return the question id."""
@@ -147,7 +179,7 @@ class SocialTests(unittest.TestCase):
         with self.assertRaises(game.GameError):self.act(self.crew[0],'discuss',meeting=m,text='spam')
     def test_restart_preserves_round_roles_and_votes(self):
         m=self.open_meeting();self.act(self.crew[0],'vote',meeting=m,target='skip');roles={p['id']:p['role'] for p in self.room['players'].values()};game.ROOMS.clear();game.load();restored=game.ROOMS[self.host['code']]
-        self.assertEqual(roles,{p['id']:p['role'] for p in restored['players'].values()});self.assertEqual(restored['game']['meeting']['votes'][self.crew[0]['id']],'skip')
+        self.assertEqual(roles,{p['id']:p['role'] for p in restored['players'].values()});self.assertEqual(restored['game']['meeting']['votes'][self.crew[0]['id']],[])
     def test_late_join_rejected_and_teacher_view_is_authorized(self):
         with self.assertRaises(game.GameError):game.dispatch('/api/join',{'code':self.host['code'],'name':'Late'})
         with self.assertRaises(game.GameError):game.dispatch('/api/host',{'code':self.host['code'],'host':self.auth[self.crew[0]['id']]['token']})
@@ -174,6 +206,6 @@ class SocialTests(unittest.TestCase):
         before=[(p['x'],p['y']) for p in r['players'].values() if p.get('bot')];social.advance(r);after=[(p['x'],p['y']) for p in r['players'].values() if p.get('bot')];self.assertNotEqual(before,after)
         human=r['players'][j['player']['id']];social.meeting(r,human,'Test meeting');g['meeting']['voteOpensAt']=time.time()-3;g['lastBotAt']=time.time()-1;social.advance(r)
         for bot in r['players'].values():
-            if bot.get('bot') and bot['role']=='crew':self.assertEqual(g['meeting']['votes'][bot['id']],'skip')
+            if bot.get('bot') and bot['role']=='crew':self.assertEqual(g['meeting']['votes'][bot['id']],[])
 
 if __name__=='__main__':unittest.main()
