@@ -1,4 +1,4 @@
-"""Magnetic Mayhem. Standard-library server; optional pypdf/python-docx imports."""
+"""Yapocalypse. Standard-library server; optional pypdf/python-docx imports."""
 import base64, copy, hashlib, io, json, math, os, re, secrets, sqlite3, threading, time
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
@@ -443,5 +443,5 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__=='__main__':
     load(); port=int(os.environ.get('PORT','8000'))
-    print(f'Magnetic Mayhem: http://localhost:{port} — '+('Claude Sonnet connected' if KEY else 'AI unavailable — configure ANTHROPIC_API_KEY'),flush=True)
+    print(f'Yapocalypse: http://localhost:{port} — '+('Claude Sonnet connected' if KEY else 'AI unavailable — configure ANTHROPIC_API_KEY'),flush=True)
     ThreadingHTTPServer(('0.0.0.0',port),Handler).serve_forever()

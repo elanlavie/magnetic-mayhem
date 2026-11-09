@@ -207,7 +207,7 @@ const Classes=(()=>{
   if(!token())return signInScreen();
   try{const r=await call('/api/auth/me');user=r.user;classes=r.classes;afterSignIn()}catch{needSignIn('Your session ended. Please sign in again.')}
  }
- return {init,token,needSignIn,classId,firstClass,prepareSetup,get user(){return user},get classes(){return classes}};
+ return {init,token,dictation,needSignIn,classId,firstClass,prepareSetup,get user(){return user},get classes(){return classes}};
 })();
 
 window.Classes=Classes;
