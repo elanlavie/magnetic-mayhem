@@ -85,6 +85,15 @@ def validate_pack(pack):
         t['icon']=str(t.get('icon','✦'))[:8]; t['color']='#91e8a4'
     return pack
 
+def think_seconds(q):
+    """Thinking time for a question: its own 'seconds' if set, else scaled by length and calculation cues. 30 to 120."""
+    try:
+        if q.get('seconds'): return max(30,min(120,int(q['seconds'])))
+    except (TypeError,ValueError): pass
+    text=str(q.get('prompt',''));words=len(text.split())
+    calc=bool(re.search(r'calculat|how (much|many|large|strong)|\d+\s*(v|a|ω|ohm|volts?|amps?|n|m|cm|kg)\b',text,re.I))
+    return max(30,min(120,int(30+words*1.0+(25 if calc else 0))))
+
 def public_pack(pack):
     p=copy.deepcopy(pack)
     for t in p['topics']:
@@ -287,7 +296,7 @@ def dispatch(path,d):
             practice=qi is None
             if qi is None: qi=secrets.randbelow(len(t['questions']))
             q=t['questions'][qi]
-            p['active']={'id':secrets.token_hex(8),'topic':topic,'index':qi,'prompt':q['prompt'],'messages':[{'role':'assistant','text':q['prompt']}],'attempts':0,'repair':False,'done':False,'busy':False,'practice':practice}
+            p['active']={'id':secrets.token_hex(8),'topic':topic,'index':qi,'prompt':q['prompt'],'think':think_seconds(q),'messages':[{'role':'assistant','text':q['prompt']}],'attempts':0,'repair':False,'done':False,'busy':False,'practice':practice}
             save(); return snapshot(r,p)
         if path in ('/api/relay','/api/repair') and r.get('game'):raise GameError('In impostor mode, complete your assigned chatbot conversations to advance the crew task bar.')
         if path=='/api/relay':
