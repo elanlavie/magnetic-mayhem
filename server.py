@@ -3,6 +3,7 @@ import base64, copy, hashlib, io, json, math, os, re, secrets, sqlite3, threadin
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.request import Request, urlopen
+import social_game as social
 
 ROOT=Path(__file__).parent
 BUILTIN=json.loads((ROOT/'public/curriculum.json').read_text())
@@ -30,8 +31,10 @@ Return only JSON {"status":"correct"|"incorrect"|"help","feedback":string}. Supp
 Judge the meaning of the student's entire conversation, not keywords, spelling, grammar, word count, or a required sentence structure. Accept concise correct answers and natural fragments. Credit understanding already demonstrated in earlier turns. Do not demand the reference answer verbatim or ask for a connection they already made.
 If a prediction is correct, acknowledge it directly. Mark correct when the core idea is demonstrated; do not withhold credit for optional extra detail. If an essential part is genuinely missing, use help and ask ONE concrete follow-up about that specific gap, building on their correct idea. Never call a correct prediction incorrect. Questions and requests for hints use help without penalizing them. An incorrect claim gets one specific, useful clue, not a generic retry message.
 Never suggest 'I predict ... because ...', sentence starters, or templates. Do not repeatedly ask the same question. Hint requests should offer a new angle based on what has already been said without immediately giving away the solution. When repairing is true, help the student restate the key idea in their own words.
-For request_type=solution, explain the worked solution clearly with status help; the student will then restate the key idea. Speak naturally in 1–3 short sentences, usually under 60 words. Use 1–2 relevant emojis, not a decorative wall of them. Correct feedback briefly celebrates the idea and links it to the station repair.'''
-class GameError(Exception): pass
+For request_type=solution, explain the worked solution clearly with status help; the student will then restate the key idea. Speak naturally in 1–3 short sentences, usually under 60 words. Use 1–2 relevant emojis, not a decorative wall of them. Correct feedback briefly celebrates the idea and links it to the station task. Occasionally use one fitting phrase: 'Let the equation guide your thinking!' for equations, 'Yum Fysicz!' for a discovery, or 'Good Energy!' for progress. Do not repeat a catchphrase every turn.'''
+GameError=social.SocialError
+social.BOT_WALLS=WALLS
+social.BOT_STATIONS=POSITIONS
 
 def save():
     with sqlite3.connect(DB) as db:
@@ -87,9 +90,14 @@ def public_pack(pack):
 def room_public(r):
     players=[]
     for p in r['players'].values():
-        players.append({k:p[k] for k in ('id','name','team','x','y','completed','score','cells','repairs','last')})
+        item={k:p[k] for k in ('id','name','team','x','y','completed','score','cells','repairs','last')}
+        item.update(alive=p.get('alive',True),bot=bool(p.get('bot')))
+        if r.get('game') and not item['alive']:item['x']=item['y']=None
+        players.append(item)
     teams={team:sorted({i for member in r['players'].values() if member['team']==team for i in member['repairs']}) for team in ('crew','mint','violet')}
-    return {'winner':r.get('winner'),'teamRepairs':teams,'code':r['code'],'mode':r['mode'],'pack':public_pack(r['pack']),'players':players,'paused':r['paused'],'closed':r.get('closed',False),'ai':True,'tutorModel':MODEL,'autoNames':r.get('autoNames',False),'first':r['first'],'followup':min(30,r['followup']),'created':r['created'],'allowStudy':r.get('allowStudy',False)}
+    result={'winner':r.get('winner'),'teamRepairs':teams,'code':r['code'],'mode':r['mode'],'pack':public_pack(r['pack']),'players':players,'paused':r['paused'],'closed':r.get('closed',False),'ai':True,'tutorModel':MODEL,'autoNames':r.get('autoNames',False),'first':r['first'],'followup':min(30,r['followup']),'created':r['created'],'allowStudy':r.get('allowStudy',False)}
+    if r.get('game'):result['game']=social.public(r)
+    return result
 
 def private_player(p): return {k:v for k,v in p.items() if k not in ('token','cache')}
 
@@ -104,7 +112,7 @@ def teacher(rq):
     if TEACHER_KEY and not secrets.compare_digest(TEACHER_KEY,str(rq.get('teacherKey',''))): raise GameError('Teacher access code is incorrect.')
     if KEY and not TEACHER_KEY: raise GameError('Set TEACHER_KEY on the server before creating live-AI games.')
 
-def snapshot(r,p): return {'room':room_public(r),'player':private_player(p)}
+def snapshot(r,p): return {'room':room_public(r),'player':{**private_player(p),**social.private(r,p)}}
 
 def dispatch(path,d):
     if path=='/api/config': return {'live':bool(KEY),'model':MODEL if KEY else None,'teacherProtected':bool(TEACHER_KEY),'builtin':BUILTIN}
@@ -136,7 +144,9 @@ def dispatch(path,d):
         source=ROOMS.get(str(d.get('source','')).upper()) if d.get('mode')=='solo' else None
         if d.get('source') and (not source or source.get('closed') or not source.get('allowStudy',False)): raise GameError('Study code not found, closed, or solo study is disabled.')
         if source: d={**d,'pack':source['pack'],'live':source['ai'],'first':source['first'],'followup':min(30,source['followup']),'autoNames':source.get('autoNames',False)}
-        if d.get('mode')!='solo': teacher(d)
+        mode=d.get('mode','coop')
+        if mode not in ('solo','coop','race','infiltration','impostorSolo'):raise GameError('Unknown game mode.')
+        if mode not in ('solo','impostorSolo'): teacher(d)
         pack=validate_pack(copy.deepcopy(d.get('pack',BUILTIN)))
         if not KEY: raise GameError('Claude Sonnet is unavailable. Your teacher needs to configure the API key before play can start.')
         with LOCK:
@@ -144,6 +154,9 @@ def dispatch(path,d):
             code=''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6))
             host=secrets.token_urlsafe(24)
             r={'code':code,'host':host,'mode':d.get('mode','coop'),'pack':pack,'players':{},'created':time.time(),'paused':False,'closed':False,'allowStudy':bool(d.get('allowStudy',True)),'autoNames':bool(d.get('autoNames',False)),'ai':True,'first':max(10,min(180,int(d.get('first',30)))),'followup':max(10,min(30,int(d.get('followup',30))))}
+            if mode in ('infiltration','impostorSolo'):
+                r['mode']='infiltration';r['botPractice']=mode=='impostorSolo';r['soloRole']=d.get('soloRole','random')
+                social.configure(r,{**d,**({'impostors':1,'writtenDiscussion':True} if r['botPractice'] else {})})
             ROOMS[code]=r; save()
             return {'code':code,'host':host}
     if path=='/api/join':
@@ -151,34 +164,63 @@ def dispatch(path,d):
             r=ROOMS.get(str(d.get('code','')).upper())
             if not r: raise GameError('Room not found. Check the code.')
             if r.get('closed'): raise GameError('The teacher has closed this room.')
+            if r.get('game') and r['game']['phase'] not in ('lobby','ended'):raise GameError('This round has started. Wait for the next lobby.')
+            if r.get('botPractice') and any(not p.get('bot') for p in r['players'].values()):raise GameError('This is a private solo practice round.')
             if len(r['players'])>=40 or (r['mode']=='solo' and r['players']): raise GameError('This room is full.')
             name=explorer_name(r) if r.get('autoNames') else (str(d.get('name','Explorer')).strip()[:24] or 'Explorer')
             pid=secrets.token_hex(6); token=secrets.token_urlsafe(24)
             team='crew' if r['mode']!='race' else ('violet' if sum(x['team']=='violet' for x in r['players'].values())<=sum(x['team']=='mint' for x in r['players'].values()) else 'mint')
             p={'id':pid,'token':token,'name':name,'team':team,'x':800,'y':460,'completed':[],'score':0,'cells':0,'repairs':[],'last':time.time(),'active':None,'history':[],'cache':{},'studied':[],'conversations':{},'relay':None,'relayRecords':{}}
-            r['players'][pid]=p; save(); return {**snapshot(r,p),'token':token}
+            r['players'][pid]=p
+            if r.get('botPractice'):
+                r['autoNames']=True
+                for _ in range(5):
+                    bot=copy.deepcopy(p);bot.update(id=secrets.token_hex(6),token=secrets.token_urlsafe(24),name=explorer_name(r),bot=True)
+                    r['players'][bot['id']]=bot
+                social.start(r)
+            save(); return {**snapshot(r,p),'token':token}
     if path=='/api/host':
         with LOCK:
             r=ROOMS.get(d.get('code',''))
             if not r or not secrets.compare_digest(r['host'],str(d.get('host',''))): raise GameError('Teacher session not found.')
             action=d.get('action')
-            if action=='pause': r['paused']=not r['paused']
+            if action=='startRound':
+                if not r.get('game'):raise GameError('Select Impostor mission to start rounds.')
+                social.start(r)
+            if action=='endRound' and r.get('game'):social.finish(r,'teacher','The teacher ended this round. Your learning is saved.')
+            if action=='removePlayer':
+                if not r.get('game') or r['game']['phase']!='lobby':raise GameError('Players can only be removed before the round starts.')
+                r['players'].pop(str(d.get('player','')),None)
+            if action=='pause':
+                r['paused']=not r['paused']
+                if r.get('game'):
+                    if r['paused']:r['game']['pausedAt']=time.time()
+                    else:social.shift_clocks(r,time.time()-r['game'].pop('pausedAt',time.time()))
             if action=='close': r['closed']=True
-            if action: save()
-            return {'room':room_public(r)}
+            changed=social.advance(r)
+            if action or changed: save()
+            result=room_public(r)
+            if r.get('game'):result['hostRoles']={p['id']:p.get('role','waiting') for p in r['players'].values()}
+            return {'room':result}
     with LOCK:
         r,p=get(d); p['last']=time.time()
+        if social.advance(r):save()
         if path=='/api/state': return snapshot(r,p)
         if path=='/api/leave':
             if p['active']: p.setdefault('conversations',{})[str(p['active']['topic'])]=p['active']
             p['active']=None; save(); return snapshot(r,p)
         if r['paused'] or r.get('closed'): raise GameError('This game is paused or closed by the teacher.')
+        if path=='/api/round':
+            if not r.get('game'):raise GameError('This room is not an impostor round.')
+            social.action(r,p,d,WALLS);save();return snapshot(r,p)
+        if r.get('game') and r['game']['phase'] in ('lobby','meeting'):raise GameError('Wait for the teacher to start or for the meeting to finish. Your chat is saved.')
         if path=='/api/move':
             if not p['active']:
                 x=float(d.get('x',p['x'])); y=float(d.get('y',p['y']))
                 if not math.isfinite(x+y): raise GameError('Invalid location.')
                 dist=math.hypot(x-p['x'],y-p['y'])
-                if dist<=180 and 25<=x<=1575 and 25<=y<=1125 and not any(a-14<x<a+w+14 and b-14<y<b+h+14 for a,b,w,h in WALLS): p['x'],p['y']=x,y
+                speed_ok=not r.get('game') or dist<=520*min(1.2,max(0,time.time()-p.get('lastMovementAt',time.time()-.4)))+18
+                if speed_ok and dist<=180 and 25<=x<=1575 and 25<=y<=1125 and not any(a-14<x<a+w+14 and b-14<y<b+h+14 for a,b,w,h in WALLS): p['x'],p['y']=x,y;p['lastMovementAt']=time.time()
             return {'ok':True,'x':p['x'],'y':p['y']}
         if path=='/api/start':
             if p['active']: return snapshot(r,p)
@@ -189,12 +231,14 @@ def dispatch(path,d):
             if previous and not previous['done']:
                 p['active']=p['conversations'].pop(str(topic)); save(); return snapshot(r,p)
             t=r['pack']['topics'][topic]
-            qi=next((i for i in range(len(t['questions'])) if f'{topic}:{i}' not in p['completed']),None)
+            qi=social.next_question(r,p,topic) if r.get('game') else None
+            if qi is None:qi=next((i for i in range(len(t['questions'])) if f'{topic}:{i}' not in p['completed']),None)
             practice=qi is None
             if qi is None: qi=secrets.randbelow(len(t['questions']))
             q=t['questions'][qi]
             p['active']={'id':secrets.token_hex(8),'topic':topic,'index':qi,'prompt':q['prompt'],'messages':[{'role':'assistant','text':q['prompt']}],'attempts':0,'repair':False,'done':False,'busy':False,'practice':practice}
             save(); return snapshot(r,p)
+        if path in ('/api/relay','/api/repair') and r.get('game'):raise GameError('In impostor mode, complete your assigned chatbot conversations to advance the crew task bar.')
         if path=='/api/relay':
             records=p.setdefault('relayRecords',{})
             if d.get('action')=='start':
@@ -246,7 +290,7 @@ def dispatch(path,d):
         text=str(d.get('text','')).strip()[:3000]; kind=d.get('kind','answer')
         if not text and kind=='answer': raise GameError('Write an idea or ask for a hint.')
         q=copy.deepcopy(r['pack']['topics'][a['topic']]['questions'][a['index']])
-        a['busy']=True; history=copy.deepcopy(a['messages']); repairing=a['repair']
+        a['busy']=True; history=copy.deepcopy(a['messages']); repairing=a['repair'];chat_round=p.get('socialRound')
     try:
         result=ai(TUTOR_PROMPT,{'question':q,'conversation':history[-14:],'student':text,'request_type':kind,'repairing':repairing},650)
         if result.get('status') not in ('correct','incorrect','help') or not isinstance(result.get('feedback'),str): raise GameError('The tutor returned an invalid response. Retry without losing an attempt.')
@@ -263,6 +307,7 @@ def dispatch(path,d):
                 if qid not in p['completed']:
                     p['completed'].append(qid); p['score']+=points; p['cells']+=1
                     p['history'].append({'question':qid,'points':points,'supported':a['repair'],'topic':r['pack']['topics'][a['topic']]['name']})
+                if r.get('game') and chat_round==p.get('socialRound'):social.record_task(r,p,qid)
                 a['done']=True
             a['messages'].append({'role':'assistant','text':result['feedback'][:3500]})
             p['cache'][rid]=True
