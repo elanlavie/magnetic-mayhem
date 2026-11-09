@@ -27,20 +27,22 @@ class GameTests(unittest.TestCase):
         return game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':rid or str(uuid.uuid4()),'kind':kind,'text':text})
     def test_public_state_hides_keys_and_answers(self):
         r=game.dispatch('/api/state',self.auth); text=json.dumps(r['room']);self.assertNotIn(self.auth['token'],text);self.assertNotIn(self.created['host'],text);self.assertNotIn('terms',text);self.assertNotIn('questions',text)
+    def ans(self):
+        a=self.p['active'];return game.BUILTIN['topics'][a['topic']]['questions'][a['index']]['answer']
     def test_hint_is_free(self):
         self.start();self.chat(kind='hint');self.assertEqual(self.p['active']['attempts'],0)
     def test_short_answer_prompts_reasoning_free(self):
         self.start();self.chat('yes');self.assertEqual(self.p['active']['attempts'],0)
     def test_success_and_duplicate_request(self):
-        self.start();answer=game.BUILTIN['topics'][0]['questions'][0]['answer'];self.chat(answer,rid='same');self.chat(answer,rid='same');self.assertEqual(self.p['score'],1);self.assertEqual(self.p['completed'],['0:0'])
+        self.start();answer=self.ans();self.chat(answer,rid='same');self.chat(answer,rid='same');self.assertEqual(self.p['score'],1);self.assertEqual(self.p['completed'],['0:%d'%self.p['active']['index']])
     def test_wrong_attempts_then_supported_revision(self):
         self.start()
         for _ in range(3):self.chat('The invisible unicorn sends purple glitter around the entire spaceship every day.')
-        self.assertTrue(self.p['active']['repair']);self.chat(game.BUILTIN['topics'][0]['questions'][0]['answer']);self.assertEqual(self.p['score'],0);self.assertTrue(self.p['active']['done'])
+        self.assertTrue(self.p['active']['repair']);self.chat(self.ans());self.assertEqual(self.p['score'],0);self.assertTrue(self.p['active']['done'])
     def test_solution_zero_points(self):
-        self.start();self.chat(kind='solution');self.chat(game.BUILTIN['topics'][0]['questions'][0]['answer']);self.assertEqual(self.p['score'],0)
+        self.start();self.chat(kind='solution');self.chat(self.ans());self.assertEqual(self.p['score'],0)
     def test_second_attempt_half_point(self):
-        self.start();self.chat('The invisible unicorn sends purple glitter around the entire spaceship every day.');self.chat(game.BUILTIN['topics'][0]['questions'][0]['answer']);self.assertEqual(self.p['score'],.5)
+        self.start();self.chat('The invisible unicorn sends purple glitter around the entire spaceship every day.');self.chat(self.ans());self.assertEqual(self.p['score'],.5)
     def test_leave_and_resume_without_losing_progress(self):
         original=self.start();self.chat(kind='hint');original_id=original['id']
         game.dispatch('/api/leave',self.auth);self.assertIsNone(self.p['active'])
@@ -101,11 +103,10 @@ class GameTests(unittest.TestCase):
         self.assertEqual(teams.count('violet'),3);self.assertEqual(teams.count('mint'),2)
     def test_full_playthrough_and_optional_practice(self):
         for topic,t in enumerate(game.BUILTIN['topics']):
-            for q in t['questions']:
-                self.start(topic);self.chat(q['answer']);self.assertTrue(self.p['active']['done'],q['prompt']);game.dispatch('/api/leave',self.auth)
+            self.start(topic);self.chat(self.ans());self.assertTrue(self.p['active']['done']);game.dispatch('/api/leave',self.auth)
             self.p['cells']=2;game.dispatch('/api/repair',{**self.auth,'topic':topic})
-        self.assertEqual(self.p['score'],14);self.assertEqual(len(self.p['repairs']),7)
-        self.start(0);self.chat(game.BUILTIN['topics'][0]['questions'][0]['answer']);self.assertEqual(self.p['score'],14)
+        self.assertEqual(self.p['score'],7);self.assertEqual(len(self.p['repairs']),7)
+        self.start(0);self.chat(self.ans());self.assertEqual(self.p['score'],7)
 
 class UpgradeTests(unittest.TestCase):
     setUp=GameTests.setUp
@@ -133,7 +134,7 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(len(set(names)),20);self.assertTrue(all('inappropriate-input' not in n for n in names))
         game.ROOMS.clear();game.load();self.assertTrue(game.ROOMS[r['code']]['autoNames'])
     def test_leave_during_api_call_keeps_result_on_original_conversation(self):
-        self.start(0);first_id=self.p['active']['id'];started=threading.Event();finish=threading.Event();errors=[]
+        self.start(0);first_id=self.p['active']['id'];first_idx=self.p['active']['index'];started=threading.Event();finish=threading.Event();errors=[]
         def response(*args):
             started.set();finish.wait(3);return {'status':'correct','feedback':'⚡ Correct.'}
         def send():
@@ -143,7 +144,7 @@ class UpgradeTests(unittest.TestCase):
             worker=threading.Thread(target=send);worker.start();self.assertTrue(started.wait(2))
             game.dispatch('/api/leave',self.auth);other=self.start(1);finish.set();worker.join(4)
         self.assertFalse(errors);self.assertEqual(self.p['active']['id'],other['id']);self.assertNotEqual(other['id'],first_id)
-        self.assertTrue(self.p['conversations']['0']['done']);self.assertEqual(self.p['completed'],['0:0']);self.assertEqual(self.p['cells'],1)
+        self.assertTrue(self.p['conversations']['0']['done']);self.assertEqual(self.p['completed'],['0:%d'%first_idx]);self.assertEqual(self.p['cells'],1)
     def test_suspended_chat_survives_restart(self):
         a=self.start();self.chat(kind='hint');game.dispatch('/api/leave',self.auth);game.ROOMS.clear();game.load()
         r,self.p=game.get(self.auth);self.assertEqual(self.start()['id'],a['id']);self.assertEqual(len(self.p['active']['messages']),3)
@@ -234,34 +235,6 @@ class VariantEncounterTests(unittest.TestCase):
             finally: game.KEY,game.TEACHER_KEY=old
 
 
-class ChoiceTests(unittest.TestCase):
-    def setUp(self):
-        self.t=tempfile.TemporaryDirectory();game.DB=self.t.name+'/t.sqlite';game.ROOMS.clear();self.old=(game.KEY,game.TEACHER_KEY,game.ai);game.KEY='k';game.TEACHER_KEY='tk'
-        self.seen=[]
-        def fake(system,data,max_tokens=650): self.seen.append(data);return {'status':'help','feedback':'Why?'}
-        game.ai=fake
-        q={'prompt':'Which?','answer':'Because.','hint':'h','level':'hard','choices':['a','b','c','d'],'correct':0}
-        pack={'title':'T','topics':[{'name':'A','questions':[q]},{'name':'B','questions':[dict(q),dict(q)]}]}
-        self.pack=pack
-        self.c=game.dispatch('/api/create',{'mode':'coop','pack':pack,'teacherKey':'tk'})
-        j=game.dispatch('/api/join',{'code':self.c['code'],'name':'Ada'});self.auth={'code':self.c['code'],'token':j['token']}
-        self.p=game.ROOMS[self.c['code']]['players'][j['player']['id']];self.p['x'],self.p['y']=game.POSITIONS[0]
-        self.a=game.dispatch('/api/start',{**self.auth,'topic':0})['player']['active']
-    def tearDown(self): game.KEY,game.TEACHER_KEY,game.ai=self.old;self.t.cleanup()
-    def chat(self,**kw): return game.dispatch('/api/chat',{**self.auth,'challenge':self.a['id'],'requestId':str(uuid.uuid4()),'kind':'answer',**kw})
-    def test_choices_visible_but_not_the_key(self):
-        self.assertEqual(self.a['choices'],['a','b','c','d']);self.assertNotIn('correct',json.dumps(game.dispatch('/api/state',self.auth)))
-    def test_choice_and_reasoning_both_required(self):
-        with self.assertRaises(game.GameError): self.chat(text='because magnets do things')
-        with self.assertRaises(game.GameError): self.chat(text='x',choice=1)
-        with self.assertRaises(game.GameError): self.chat(text='because magnets do things',choice=9)
-        self.chat(text='because magnets do things',choice=1)
-        self.assertEqual(self.seen[-1]['student_choice'],1);self.assertIn('My choice: B) b',self.seen[-1]['student'])
-    def test_level_changes_time_and_trim(self):
-        self.assertGreater(game.think_seconds({'prompt':'x','level':'hard'}),game.think_seconds({'prompt':'x','level':'easy'}))
-        p=game.trim_pack(copy.deepcopy(self.pack),2);self.assertEqual([len(t['questions']) for t in p['topics']],[1,1])
-        self.assertEqual(sum(len(t['questions']) for t in game.trim_pack(copy.deepcopy(self.pack),99)['topics']),3)
-
 
 class GenerateTests(unittest.TestCase):
     def test_generate_builds_topics_in_parallel_and_survives_a_failure(self):
@@ -270,12 +243,12 @@ class GenerateTests(unittest.TestCase):
             def fake(system,data,max_tokens=650,wait=None):
                 if 'topic' not in data: return {'title':'Circuits','topics':[{'name':'Ohm','icon':'⚡','focus':'f'},{'name':'Bad','icon':'x','focus':'f'}]}
                 if data['topic']=='Bad': raise game.GameError('boom')
-                return {'questions':[{'prompt':'Why?','answer':'Because.','hint':'h','choices':['a','b'],'correct':1,'level':'easy'}]}
+                return {'questions':[{'prompt':'Why?','answer':'Because.','hint':'h','level':'easy'}]}
             game.ai=fake
             try:
                 r=game.dispatch('/api/generate',{'text':'ohms law','teacherKey':'tk'})
                 self.assertEqual([t['name'] for t in r['pack']['topics']],['Ohm']);self.assertTrue(r['partial'])
-                self.assertEqual(r['pack']['topics'][0]['questions'][0]['correct'],1)
+                self.assertEqual(r['pack']['topics'][0]['questions'][0]['level'],'easy')
             finally: game.KEY,game.TEACHER_KEY,game.ai=old
 
 
