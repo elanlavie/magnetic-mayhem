@@ -197,3 +197,38 @@ class MediaPackTests(unittest.TestCase):
         p=game.validate_pack({'title':'T','topics':[{'name':'A','sim':{'url':'http://bad.com/x'},'questions':[{'prompt':'Why?','answer':'Because reasons here.','hint':'Think.','image':'javascript:1'}]},{'name':'B','sim':{'url':'https://ok.org/s','title':'S'},'questions':[{'prompt':'Why2?','answer':'Because reasons here.','hint':'Think.','image':'https://ok.org/i.png'}]}]})
         self.assertNotIn('sim',p['topics'][0]);self.assertNotIn('image',p['topics'][0]['questions'][0])
         self.assertEqual(p['topics'][1]['sim']['url'],'https://ok.org/s');self.assertEqual(p['topics'][1]['questions'][0]['image'],'https://ok.org/i.png')
+
+
+class VariantTests(unittest.TestCase):
+    def test_svg_cleaning(self):
+        self.assertTrue(game.clean_svg('<svg viewBox="0 0 10 10"><circle r="3"/></svg>').startswith('<svg xmlns='))
+        for bad in ('<svg><script>x</script></svg>','<svg onload="x()"></svg>','<svg><image href="http://e"/></svg>','<div></div>','<svg>'+'a'*9000+'</svg>'):
+            self.assertEqual(game.clean_svg(bad),'')
+    def test_variants_resolved_and_validated(self):
+        q={'prompt':'A','answer':'a','hint':'h','variants':[{'prompt':'B','answer':'b','hint':'h2'}]}
+        self.assertEqual(game.resolve_question(q,0)['prompt'],'A')
+        self.assertEqual(game.resolve_question(q,1)['prompt'],'B')
+        self.assertNotIn('variants',game.resolve_question(q,1))
+        p=game.validate_pack({'title':'T','topics':[{'name':'A','questions':[dict(q,variants=q['variants']+[{'prompt':'x'}],diagram='<svg><script/></svg>')]}]})
+        self.assertEqual(len(p['topics'][0]['questions'][0]['variants']),1);self.assertNotIn('diagram',p['topics'][0]['questions'][0])
+
+
+class VariantEncounterTests(unittest.TestCase):
+    def test_student_gets_variant_and_diagram(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            game.DB=tmp+'/t.sqlite';game.ROOMS.clear()
+            old=(game.KEY,game.TEACHER_KEY);game.KEY='k';game.TEACHER_KEY='tk'
+            try:
+                svg='<svg viewBox="0 0 10 10"><circle r="3"/></svg>'
+                base={'prompt':'Base 6 V?','answer':'a','hint':'h','variants':[{'prompt':'Var 9 V?','answer':'b','hint':'h','diagram':svg}]}
+                pack={'title':'T','topics':[{'name':'Circuits','questions':[base]}]}
+                c=game.dispatch('/api/create',{'mode':'coop','pack':pack,'teacherKey':'tk'})
+                seen=set()
+                for _ in range(40):
+                    j=game.dispatch('/api/join',{'code':c['code'],'name':'S%d'%_})
+                    p=game.ROOMS[c['code']]['players'][j['player']['id']];p['x'],p['y']=game.POSITIONS[0]
+                    a=game.dispatch('/api/start',{'code':c['code'],'token':j['token'],'topic':0})['player']['active']
+                    seen.add(a['prompt'])
+                    if a['prompt'].startswith('Var'): self.assertTrue(a['image'].startswith('data:image/svg+xml'))
+                self.assertEqual(seen,{'Base 6 V?','Var 9 V?'})
+            finally: game.KEY,game.TEACHER_KEY=old
