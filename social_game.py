@@ -20,7 +20,7 @@ MAX_SHIELDS=2
 def configure(room,options):
     room['game']={'phase':'lobby','round':0,'impostorCount':1,
                   'tasksPerCrew':max(1,min(7,int(options.get('tasksPerCrew',5)))),
-                  'roundSeconds':max(120,min(1800,int(options.get('roundSeconds',480)))),'crewTargetPct':max(50,min(100,int(options.get('crewTargetPct',80)))),'roundEndsAt':0,
+                  'roundSeconds':(0 if not int(options.get('roundSeconds',0) or 0) else max(120,min(3600,int(options['roundSeconds'])))),'crewTargetPct':max(50,min(100,int(options.get('crewTargetPct',80)))),'roundEndsAt':0,
                   'discussionSeconds':max(15,min(180,int(options.get('discussionSeconds',30)))),
                   'voteSeconds':max(15,min(300,int(options.get('voteSeconds',90)))),
                   'questionsPerTag':1,
@@ -50,7 +50,7 @@ def start(room):
     human=next((p['id'] for p in room['players'].values() if not p.get('bot')),None)
     if preferred=='impostor':impostors={human}
     elif preferred=='crew':impostors={secrets.choice([p['id'] for p in room['players'].values() if p.get('bot')])}
-    now=time.time();g.update(phase='playing',round=g['round']+1,winner=None,reason='',meeting=None,sabotage=None,bodies=[],lastMeeting=None,nextMeetingAt=now+MEETING_COOLDOWN,nextSabotageAt=now+20,roundEndsAt=now+g['roundSeconds'])
+    now=time.time();g.update(phase='playing',round=g['round']+1,winner=None,reason='',meeting=None,sabotage=None,bodies=[],lastMeeting=None,nextMeetingAt=now+MEETING_COOLDOWN,nextSabotageAt=now+20,roundEndsAt=now+g['roundSeconds'] if g['roundSeconds'] else 0)
     for p in room['players'].values():
         park(p)
         p.update(role='impostor' if p['id'] in impostors else 'crew',alive=True,emergencies=1,
