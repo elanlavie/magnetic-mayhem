@@ -277,3 +277,19 @@ class GenerateTests(unittest.TestCase):
                 self.assertEqual([t['name'] for t in r['pack']['topics']],['Ohm']);self.assertTrue(r['partial'])
                 self.assertEqual(r['pack']['topics'][0]['questions'][0]['correct'],1)
             finally: game.KEY,game.TEACHER_KEY,game.ai=old
+
+
+class MoreTimeTests(unittest.TestCase):
+    def test_more_time_costs_a_cell(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            game.DB=tmp+'/t.sqlite';game.ROOMS.clear();old=(game.KEY,game.TEACHER_KEY);game.KEY='k';game.TEACHER_KEY='tk'
+            try:
+                pack={'title':'T','topics':[{'name':'A','questions':[{'prompt':'Why?','answer':'a','hint':'h'}]}]}
+                c=game.dispatch('/api/create',{'mode':'coop','pack':pack,'teacherKey':'tk'})
+                j=game.dispatch('/api/join',{'code':c['code'],'name':'Ada'});auth={'code':c['code'],'token':j['token']}
+                p=game.ROOMS[c['code']]['players'][j['player']['id']];p['x'],p['y']=game.POSITIONS[0]
+                a=game.dispatch('/api/start',{**auth,'topic':0})['player']['active']
+                with self.assertRaises(game.GameError): game.dispatch('/api/moretime',{**auth,'challenge':a['id']})
+                p['cells']=2
+                self.assertEqual(game.dispatch('/api/moretime',{**auth,'challenge':a['id']})['player']['cells'],1)
+            finally: game.KEY,game.TEACHER_KEY=old
