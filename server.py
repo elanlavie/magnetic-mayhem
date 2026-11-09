@@ -138,9 +138,11 @@ def snapshot(r,p): return {'room':room_public(r),'player':{**private_player(p),*
 
 def dispatch(path,d):
     if path=='/api/config': return {'live':bool(KEY),'model':MODEL if KEY else None,'teacherProtected':bool(TEACHER_KEY),'builtin':BUILTIN,'gameTypes':game_types.public(),**accounts.public_config()}
-    if path.startswith('/api/auth/') or path.startswith('/api/class/'):
+    if path.startswith('/api/auth/') or path.startswith('/api/class/') or path.startswith('/api/library/'):
         if not accounts.enabled():raise GameError('Classes are not enabled on this server.')
-        return accounts.dispatch(DB,path,d,ai)
+        result=accounts.dispatch(DB,path,d,ai)
+        if path=='/api/library/pack':result['pack']=validate_pack(result['pack'])
+        return result
     if path=='/api/extract':
         teacher_gate(d)
         try:

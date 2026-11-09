@@ -57,6 +57,7 @@ const Classes=(()=>{
   const alertId=new URLSearchParams(location.search).get('alert');
   if(alertId&&user.role==='teacher'){history.replaceState(null,'',location.pathname);openAlert(alertId)}
   populateClassPick();
+  if(user.role==='teacher')libMount();
  }
 
  // ---------- teacher / student class screen
@@ -107,6 +108,47 @@ const Classes=(()=>{
   const rt=el.querySelector('#retry');if(rt)rt.onclick=async()=>{try{await call('/api/class/alert/retry',{alertId:id});toast('Retrying…');openAlert(id)}catch(e){toast(e.message)}};
  }
 
+ // ---------- private question library (teacher setup screen)
+ let libSets=[];
+ async function libLoad(){try{libSets=(await call('/api/library/list')).sets}catch{libSets=[]}libRender()}
+ function libRender(){
+  const box=document.getElementById('lib-sets');if(!box)return;
+  box.innerHTML=libSets.map(s=>`<div class="lib-set"><label class="check"><input type="checkbox" class="lib-pick" value="${esc(s.id)}"> <strong>${esc(s.title)}</strong> <span class="muted">${s.count} questions</span></label><button class="small danger" data-libdel="${esc(s.id)}" aria-label="Delete ${esc(s.title)}">🗑</button></div>`).join('')||'<p class="hint-text">No saved question sets yet. Import a test below. Only you can see your library.</p>';
+  box.querySelectorAll('.lib-pick').forEach(i=>i.onchange=libSubjects);
+  box.querySelectorAll('[data-libdel]').forEach(b=>b.onclick=async()=>{if(!confirm('Delete this question set from your library?'))return;try{await call('/api/library/delete',{id:b.dataset.libdel});await libLoad()}catch(e){toast(e.message)}});
+  libSubjects();
+ }
+ function libSubjects(){
+  const picked=[...document.querySelectorAll('.lib-pick:checked')].map(i=>i.value),tags={};
+  libSets.filter(s=>picked.includes(s.id)).forEach(s=>Object.entries(s.subjects).forEach(([k,n])=>tags[k]=(tags[k]||0)+n));
+  document.getElementById('lib-subjects').innerHTML=Object.entries(tags).map(([k,n])=>`<label class="check"><input type="checkbox" class="lib-subject" value="${esc(k)}"> ${esc(k)} <span class="muted">(${n})</span></label>`).join('');
+  document.getElementById('lib-build').disabled=!picked.length;
+ }
+ function libMount(){
+  if(document.getElementById('libbox'))return;
+  const anchor=document.getElementById('packtitle');
+  anchor.insertAdjacentHTML('beforebegin',`<details id="libbox" class="lib-box"><summary>📚 My question library <span class="muted">(private to you)</span></summary>
+   <div id="lib-sets"></div><div class="muted">Topics to include <span class="hint-text">(leave all unchecked to use every topic)</span></div><div id="lib-subjects"></div>
+   <button id="lib-build" class="small" disabled>Build mission from selection</button>
+   <h3>Add to library</h3><p class="hint-text">Import a test or study guide (TXT, PDF, DOCX) or paste it. Multiple-choice questions become "explain your reasoning" questions, each tagged by topic.</p>
+   <div class="toolbar"><label class="file-label small">Choose file<input id="lib-file" type="file" accept=".txt,.md,.pdf,.docx" hidden></label><span id="lib-note" class="muted"></span></div>
+   <textarea id="lib-text" rows="5" placeholder="Or paste the questions here"></textarea><button id="lib-import" class="primary small">Add to my library</button></details>`);
+  document.getElementById('lib-build').onclick=async()=>{
+   const ids=[...document.querySelectorAll('.lib-pick:checked')].map(i=>i.value),subjects=[...document.querySelectorAll('.lib-subject:checked')].map(i=>i.value);
+   try{const r=await call('/api/library/pack',{ids,subjects,title:subjects.length?subjects.join(' & ')+' mission':undefined});pack=r.pack;preview();toast('Mission built from your library. Review it below, then create the room.')}catch(e){toast(e.message)}};
+  document.getElementById('lib-file').onchange=async e=>{
+   const f=e.target.files[0];if(!f)return;const note=document.getElementById('lib-note');
+   try{if(f.size>4000000)throw Error('Choose a file smaller than 4 MB.');
+    if(/\.(txt|md)$/i.test(f.name))document.getElementById('lib-text').value=await f.text();
+    else{note.textContent='Reading file…';const bytes=new Uint8Array(await f.arrayBuffer());let bin='';for(let i=0;i<bytes.length;i+=8192)bin+=String.fromCharCode(...bytes.slice(i,i+8192));const r=await call('/api/extract',{name:f.name,data:btoa(bin)});document.getElementById('lib-text').value=r.text}
+    note.textContent='File read. Click "Add to my library".'}catch(err){note.textContent='';toast(err.message)}e.target.value=''};
+  document.getElementById('lib-import').onclick=async()=>{
+   const b=document.getElementById('lib-import'),note=document.getElementById('lib-note');b.disabled=true;note.textContent='Reading questions with AI… this can take a minute.';
+   try{const s=await call('/api/library/import',{text:document.getElementById('lib-text').value});document.getElementById('lib-text').value='';note.textContent=`Added "${s.title}" with ${s.count} questions.`;await libLoad()}
+   catch(e){note.textContent='';toast(e.message)}finally{b.disabled=false}};
+  libLoad();
+ }
+
  // ---------- class picker inside game setup
  function populateClassPick(){
   const sel=document.getElementById('classpick');if(!sel)return;
@@ -121,6 +163,7 @@ const Classes=(()=>{
    an.parentElement.insertAdjacentHTML('afterend','<p class="hint-text">Unchecked: students appear with the nicknames you saved for the class, so you can match online play to who is in the room. Checked: they get random names, and only you can see who is who.</p>');
   }
   populateClassPick();
+  if(user?.role==='teacher')libMount();
  }
  function classId(){const s=document.getElementById('classpick');return s?s.value:''}
  function firstClass(){return classes[0]?.id||''}
