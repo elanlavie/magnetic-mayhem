@@ -231,6 +231,16 @@ def invite_create(db, user, class_id, days=14, max_uses=0):
     return {'code': code, 'url': f'{PUBLIC_URL}/?join={code}' if PUBLIC_URL else f'/?join={code}', 'expires': expires}
 
 
+def class_delete(db, user, class_id):
+    """Permanently delete a class and everything stored for it (students, invites, chats, alerts)."""
+    with tx(db) as c:
+        _owned(c, user, class_id)
+        for table in ('members', 'invites', 'messages', 'alerts'):
+            c.execute(f'delete from {table} where class_id=?', (str(class_id),))
+        c.execute('delete from classes where id=?', (str(class_id),))
+    return {'ok': True}
+
+
 def invite_revoke(db, user, class_id):
     with tx(db) as c:
         _owned(c, user, class_id)
@@ -528,6 +538,8 @@ def dispatch(db, path, d, ask=None):
         return class_create(db, user, d.get('name'), d.get('domains') or DEFAULT_STUDENT_DOMAINS)
     if path == '/api/class/list':
         return {'classes': class_list(db, user)}
+    if path == '/api/class/delete':
+        return class_delete(db, user, d.get('classId'))
     if path == '/api/class/join':
         return join_class(db, user, d.get('code'))
     if path == '/api/class/invite':
