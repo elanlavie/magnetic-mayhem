@@ -12,7 +12,7 @@ class SocialTests(unittest.TestCase):
         self.room=game.ROOMS[self.host['code']];self.auth={}
         for name in ('A','B','C','D'):
             data=game.dispatch('/api/join',{'code':self.host['code'],'name':name});self.auth[data['player']['id']]={'code':self.host['code'],'token':data['token']}
-        game.dispatch('/api/host',{**self.host,'action':'startRound'})
+        game.dispatch('/api/host',{**self.host,'action':'startRound'});self.room_=game.ROOMS[self.host['code']];self.assertEqual(self.room_['game']['phase'],'briefing');social.begin_play(self.room_)
         self.imp=next(p for p in self.room['players'].values() if p['role']=='impostor');self.crew=[p for p in self.room['players'].values() if p['role']=='crew'];self.g=self.room['game']
     def tearDown(self):game.DB,game.KEY,game.TEACHER_KEY=self.old;self.temp.cleanup()
     def act(self,p,action,**extra):return game.dispatch('/api/round',{**self.auth[p['id']],'action':action,**extra})
@@ -79,6 +79,15 @@ class SocialTests(unittest.TestCase):
         m=self.open_meeting();self.assertIsNone(p['active']);self.assertIn(str(i),p['conversations']);self.assertEqual((p['x'],p['y']),(800,460))
         with self.assertRaises(game.GameError):game.dispatch('/api/start',{**self.auth[p['id']],'topic':i})  # no new chats during a meeting
         self.act(p,'vote',meeting=m,target='skip')  # votes right away, no chat to finish
+    def test_role_briefing_holds_the_round_clock_until_it_ends(self):
+        h=game.dispatch('/api/create',{'mode':'infiltration','teacherKey':'teacher-test','impostors':1,'tasksPerCrew':2,'roundSeconds':600,'briefingSeconds':30});code=h['code'];ids=[]
+        for n in 'ABCD':d=game.dispatch('/api/join',{'code':code,'name':n});ids.append({'code':code,'token':d['token']})
+        game.dispatch('/api/host',{**h,'action':'startRound'});r=game.ROOMS[code];g=r['game']
+        self.assertEqual(g['phase'],'briefing');self.assertEqual(g['roundEndsAt'],0);self.assertGreater(g['briefingEndsAt'],time.time()+20)
+        with self.assertRaises(game.GameError):game.dispatch('/api/start',{**ids[0],'topic':0})  # no chats while reading roles
+        self.assertTrue(all(p['role'] in ('crew','impostor') for p in r['players'].values()))  # roles already assigned for the briefing
+        g['briefingEndsAt']=time.time()-1;game.dispatch('/api/state',ids[0])
+        self.assertEqual(g['phase'],'playing');self.assertGreater(g['roundEndsAt'],time.time()+500)  # the 10-minute timer starts only now
     def test_meeting_frequency_is_a_teacher_option(self):
         self.assertEqual(self.g['meetingSeconds'],240)
         h=game.dispatch('/api/create',{'mode':'infiltration','teacherKey':'teacher-test','meetingSeconds':120});self.assertEqual(game.ROOMS[h['code']]['game']['meetingSeconds'],120)
@@ -208,7 +217,7 @@ class SocialTests(unittest.TestCase):
             for point in path:self.assertTrue(social.visible_line(previous,point,game.WALLS));previous=point
             self.assertLess(math.dist(path[-1],target),20)
     def test_bot_movement_and_votes_use_observations(self):
-        h=game.dispatch('/api/create',{'mode':'impostorSolo','soloRole':'crew'});j=game.dispatch('/api/join',{'code':h['code'],'name':'Human'});r=game.ROOMS[h['code']];g=r['game'];g['lastBotAt']=time.time()-1
+        h=game.dispatch('/api/create',{'mode':'impostorSolo','soloRole':'crew'});j=game.dispatch('/api/join',{'code':h['code'],'name':'Human'});r=game.ROOMS[h['code']];g=r['game'];social.begin_play(r);g['lastBotAt']=time.time()-1
         before=[(p['x'],p['y']) for p in r['players'].values() if p.get('bot')];social.advance(r);after=[(p['x'],p['y']) for p in r['players'].values() if p.get('bot')];self.assertNotEqual(before,after)
         human=r['players'][j['player']['id']];social.meeting(r,human,'Test meeting');g['meeting']['voteOpensAt']=time.time()-3;g['lastBotAt']=time.time()-1;social.advance(r)
         for bot in r['players'].values():
