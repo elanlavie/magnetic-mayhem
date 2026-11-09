@@ -44,7 +44,7 @@ function renderSocial(){const g=socialGame(),panel=$('#social-panel');panel.clas
   $$('[data-panel]').forEach(b=>b.onclick=()=>socialAction('stabilize',{panel:Number(b.dataset.panel)}));
  }
  if(showBallot)renderMeeting();
- if(g.lastMeeting?.id&&socialNoticeSeen!==g.lastMeeting.id){socialNoticeSeen=g.lastMeeting.id;toast(g.lastMeeting.message)}
+ if(g.lastMeeting?.id&&socialNoticeSeen!==g.lastMeeting.id){socialNoticeSeen=g.lastMeeting.id;logEvent(g.lastMeeting.message)}
  if(g.phase==='ended'&&socialResultSeen!==r.code+':'+g.round){socialResultSeen=r.code+':'+g.round;showRoundResult();}
  const assigned=p.roundTasks||[],completed=p.roundDone||[];
  $('#mission-label').textContent=`🕵️ IMPOSTOR MISSION · ${r.code}`;$('#progress-copy').textContent=`Your ${p.role==='impostor'?'practice':'assigned'} chats: ${completed.length}/${assigned.length}${alive?'':' · ghosts still help!'}`;
