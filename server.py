@@ -4,6 +4,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.request import Request, urlopen
 import social_game as social
+import game_types
 
 ROOT=Path(__file__).parent
 BUILTIN=json.loads((ROOT/'public/curriculum.json').read_text())
@@ -48,6 +49,7 @@ def load():
             r=json.loads(data)
             if time.time()-r['created']<7*86400:
                 r['ai']=True
+                r.setdefault('gameType',game_types.DEFAULT)
                 r['followup']=min(30,r.get('followup',30))
                 for p in r['players'].values():
                     if p.get('active'): p['active']['busy']=False
@@ -95,7 +97,7 @@ def room_public(r):
         if r.get('game') and not item['alive']:item['x']=item['y']=None
         players.append(item)
     teams={team:sorted({i for member in r['players'].values() if member['team']==team for i in member['repairs']}) for team in ('crew','mint','violet')}
-    result={'winner':r.get('winner'),'teamRepairs':teams,'code':r['code'],'mode':r['mode'],'pack':public_pack(r['pack']),'players':players,'paused':r['paused'],'closed':r.get('closed',False),'ai':True,'tutorModel':MODEL,'autoNames':r.get('autoNames',False),'first':r['first'],'followup':min(30,r['followup']),'created':r['created'],'allowStudy':r.get('allowStudy',False)}
+    result={'winner':r.get('winner'),'teamRepairs':teams,'code':r['code'],'mode':r['mode'],'gameType':r.get('gameType',game_types.DEFAULT),'pack':public_pack(r['pack']),'players':players,'paused':r['paused'],'closed':r.get('closed',False),'ai':True,'tutorModel':MODEL,'autoNames':r.get('autoNames',False),'first':r['first'],'followup':min(30,r['followup']),'created':r['created'],'allowStudy':r.get('allowStudy',False)}
     if r.get('game'):result['game']=social.public(r)
     return result
 
@@ -115,7 +117,7 @@ def teacher(rq):
 def snapshot(r,p): return {'room':room_public(r),'player':{**private_player(p),**social.private(r,p)}}
 
 def dispatch(path,d):
-    if path=='/api/config': return {'live':bool(KEY),'model':MODEL if KEY else None,'teacherProtected':bool(TEACHER_KEY),'builtin':BUILTIN}
+    if path=='/api/config': return {'live':bool(KEY),'model':MODEL if KEY else None,'teacherProtected':bool(TEACHER_KEY),'builtin':BUILTIN,'gameTypes':game_types.public()}
     if path=='/api/extract':
         teacher(d)
         try:
@@ -143,9 +145,12 @@ def dispatch(path,d):
     if path=='/api/create':
         source=ROOMS.get(str(d.get('source','')).upper()) if d.get('mode')=='solo' else None
         if d.get('source') and (not source or source.get('closed') or not source.get('allowStudy',False)): raise GameError('Study code not found, closed, or solo study is disabled.')
-        if source: d={**d,'pack':source['pack'],'live':source['ai'],'first':source['first'],'followup':min(30,source['followup']),'autoNames':source.get('autoNames',False)}
+        if source: d={**d,'gameType':source.get('gameType',game_types.DEFAULT),'pack':source['pack'],'live':source['ai'],'first':source['first'],'followup':min(30,source['followup']),'autoNames':source.get('autoNames',False)}
         mode=d.get('mode','coop')
         if mode not in ('solo','coop','race','infiltration','impostorSolo'):raise GameError('Unknown game mode.')
+        game_type=str(d.get('gameType') or game_types.DEFAULT)
+        problem=game_types.check(game_type,mode)
+        if problem:raise GameError(problem)
         if mode not in ('solo','impostorSolo'): teacher(d)
         pack=validate_pack(copy.deepcopy(d.get('pack',BUILTIN)))
         if not KEY: raise GameError('Claude Sonnet is unavailable. Your teacher needs to configure the API key before play can start.')
@@ -153,7 +158,7 @@ def dispatch(path,d):
             if len(ROOMS)>300: raise GameError('Server room limit reached.')
             code=''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6))
             host=secrets.token_urlsafe(24)
-            r={'code':code,'host':host,'mode':d.get('mode','coop'),'pack':pack,'players':{},'created':time.time(),'paused':False,'closed':False,'allowStudy':bool(d.get('allowStudy',True)),'autoNames':bool(d.get('autoNames',False)),'ai':True,'first':max(10,min(180,int(d.get('first',30)))),'followup':max(10,min(30,int(d.get('followup',30))))}
+            r={'code':code,'host':host,'gameType':game_type,'mode':d.get('mode','coop'),'pack':pack,'players':{},'created':time.time(),'paused':False,'closed':False,'allowStudy':bool(d.get('allowStudy',True)),'autoNames':bool(d.get('autoNames',False)),'ai':True,'first':max(10,min(180,int(d.get('first',30)))),'followup':max(10,min(30,int(d.get('followup',30))))}
             if mode in ('infiltration','impostorSolo'):
                 r['mode']='infiltration';r['botPractice']=mode=='impostorSolo';r['soloRole']=d.get('soloRole','random')
                 social.configure(r,{**d,**({'impostors':1,'writtenDiscussion':True} if r['botPractice'] else {})})

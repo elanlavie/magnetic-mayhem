@@ -163,4 +163,17 @@ class UpgradeTests(unittest.TestCase):
         game.ROOMS.clear();game.load();r,p=game.get(self.auth)
         self.assertTrue(r['ai']);self.assertEqual(r['followup'],30);self.assertNotIn('conversations',json.dumps(game.room_public(r)))
 
+    def test_game_types_listed_and_default_is_station(self):
+        types={t['id']:t for t in game.dispatch('/api/config',{})['gameTypes']}
+        self.assertTrue(types['station']['available']);self.assertFalse(types['climb']['available'])
+        self.assertEqual(game.room_public(game.ROOMS[self.auth['code']])['gameType'],'station')
+    def test_unavailable_or_unknown_game_type_is_rejected(self):
+        for bad in ('climb','nonsense'):
+            with self.assertRaises(game.GameError):game.dispatch('/api/create',{'mode':'coop','gameType':bad,'pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
+    def test_old_rooms_load_as_station_and_study_rooms_inherit_type(self):
+        r=game.ROOMS[self.auth['code']];r.pop('gameType');game.save();game.ROOMS.clear();game.load()
+        self.assertEqual(game.ROOMS[self.auth['code']]['gameType'],'station')
+        solo=game.dispatch('/api/create',{'mode':'solo','source':self.auth['code']})
+        self.assertEqual(game.ROOMS[solo['code']]['gameType'],'station')
+
 if __name__=='__main__':unittest.main()
