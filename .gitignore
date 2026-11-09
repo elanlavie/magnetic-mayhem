@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+*.sqlite3
+*.sqlite3-*
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+.DS_Store
+
