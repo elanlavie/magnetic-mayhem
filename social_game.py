@@ -221,7 +221,7 @@ def meeting(room,caller,reason):
     # Meetings never interrupt a conversation: players keep chatting and vote between chats.
     g=room['game'];now=time.time();land_tags(room,True)
     living=[p for p in room['players'].values() if p.get('alive',True)]
-    g['meeting']={'id':secrets.token_hex(8),'caller':'The station','maxVotes':max(1,g['impostorCount']-g.get('impostorsEjected',0)),'needed':max(2,min(g['impostorCount']+1,len(living)//2+1)),'reason':reason,'started':now,
+    g['meeting']={'id':secrets.token_hex(8),'caller':'The station','maxVotes':max(1,g['impostorCount']-g.get('impostorsEjected',0)),'needed':max(2,min(g['impostorCount']-g.get('impostorsEjected',0)+1,len(living)//2+1)),'reason':reason,'started':now,
                   'voteOpensAt':now+g['discussionSeconds'],'endsAt':now+g['discussionSeconds']+g['voteSeconds'],'votes':{},'messages':[],'botSpoke':[]}
     g['phase']='meeting';g['meetingCount']=g.get('meetingCount',0)+1
     if g.get('interruptChats',True):
