@@ -61,10 +61,10 @@ class GameTests(unittest.TestCase):
         auth,p,a=self.mc_player({'mc':True,'free':True});self.assertEqual(a['mode'],'both')
         seen=[];self.ai_patch.stop();self.ai_patch=patch.object(game,'ai',side_effect=lambda s,d,*x,**k:seen.append(d) or {'status':'correct','feedback':'Great!'});self.ai_patch.start()
         with self.assertRaises(game.GameError):self.mc_chat(auth,p,text='because magnets pull things')
-        with self.assertRaises(game.GameError):self.mc_chat(auth,p,1,'yes')
+        with self.assertRaises(game.GameError):self.mc_chat(auth,p,1,'   ')
         r=self.mc_chat(auth,p,0,'I think magnets pull on iron so this one')['player']['active']
         self.assertFalse(r['done']);self.assertNotIn('Great',r['messages'][-1]['text']);self.assertEqual(seen[-1]['student_choice'],0);self.assertIn('My choice: A) A one',seen[-1]['student'])
-        r=self.mc_chat(auth,p,1,'Domains line up so the field points one way')['player']['active'];self.assertTrue(r['done'])
+        r=self.mc_chat(auth,p,1,'poles repel')['player']['active'];self.assertTrue(r['done']);self.assertIn('My reasoning: poles repel',seen[-1]['student'])
     def test_free_response_pack_ignores_choices(self):
         auth,p,a=self.mc_player({'mc':False,'free':True});self.assertEqual(a['mode'],'free');self.assertEqual(a['choices'],[])
     def test_generate_makes_exactly_the_requested_number_of_stations(self):
