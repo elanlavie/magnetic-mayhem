@@ -206,8 +206,8 @@ def visible_line(a,b,walls):
 def near(a,b,radius,walls):
     return math.dist((a['x'],a['y']),(b['x'],b['y']))<=radius and visible_line((a['x'],a['y']),(b['x'],b['y']),walls)
 
-def notify(player,text):
-    notes=player.setdefault('notices',[]);notes.append({'id':secrets.token_hex(4),'text':text});del notes[:-5]
+def notify(player,text,kind=None,sub=''):
+    notes=player.setdefault('notices',[]);notes.append({'id':secrets.token_hex(4),'text':text,'kind':kind,'sub':sub});del notes[:-5]
 
 def conversation_completed(room,player,qid):
     """Reward a correct conversation. Call BEFORE record_task so we can tell extra chats from assigned ones."""
@@ -280,8 +280,8 @@ def action(room,player,data,walls):
         player['tagCharge']=max(0,charge-need)
         if target.get('shield',0)>0:
             target['shield']-=1;player['killReadyAt']=now+KILL_COOLDOWN/2
-            notify(target,'🛡️ Your shield blocked a tag attempt! Someone nearby is the impostor. Remember who was close.')
-            notify(player,'🛡️ That crewmate had a shield. Your tag was blocked.')
+            notify(target,'🛡️ Your shield blocked a tag!','shield','Someone nearby is an impostor. Remember who was close.')
+            notify(player,'🛡️ Blocked! That crewmate had a shield.','shield','Your tag charge was used up. Try again after a short cooldown.')
             return
         for witness in room['players'].values():
             if witness.get('bot') and witness.get('alive',True) and witness['id'] not in (player['id'],target['id']) and near(witness,player,230,walls):witness['botSuspect']=player['id']

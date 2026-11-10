@@ -42,13 +42,14 @@ async function socialAction(action,extra={}){if(socialBusy)return;socialBusy=tru
  const data=await api('/api/round',auth({action,...extra}));state=data;updateHUD();
 }catch(e){toast(e.message)}finally{socialBusy=false;}}
 let tagSeen=null;
+function showBanner(emoji,title,sub){const el=document.createElement('div');el.className='tag-alert shield';el.setAttribute('role','alert');el.innerHTML=`<span>${emoji}</span><div><b>${esc(title)}</b><small>${esc(sub)}</small></div>`;document.body.appendChild(el);setTimeout(()=>el.remove(),8000)}
 function showTagAlert(name){const el=document.createElement('div');el.className='tag-alert';el.setAttribute('role','alert');el.innerHTML=`<span>📡</span><div><b>${esc(name)} was powered down!</b><small>They are now a 👻 ghost.</small></div>`;document.body.appendChild(el);setTimeout(()=>el.remove(),8000)}
 function renderTagFeed(){const g=socialGame();if(!g)return;const feed=g.tagFeed||[];if(tagSeen===null){tagSeen=new Set(feed.map(f=>f.id));return}feed.forEach(f=>{if(!tagSeen.has(f.id)){tagSeen.add(f.id);showTagAlert(f.name)}})}
 function renderSocial(){const g=socialGame(),panel=$('#social-panel');renderBriefing();renderTagFeed();renderTagPrompt();panel.classList.toggle('hidden',!g);const showBallot=Boolean(g&&g.phase==='meeting'&&g.meeting&&state?.player?.alive!==false&&!state?.player?.active&&(g.interruptChats||socialBallotDismissed!==g.meeting.id));$('#meeting-panel').classList.toggle('hidden',!showBallot);
  if(!g){$('.nova-card p').textContent='Run supplies 📦, collect energy ⚡, and repair the station 🔧. Chat whenever you want; leave whenever you want.';$('.map-bottom span:last-child').textContent='⚡ COLLECT CELLS';return;}
  $('.nova-card p').textContent='🧠 Your assigned conversations are the tasks. Watch who was nearby, remember who was nearby, and help your crew vote from evidence.';$('.map-bottom span:last-child').textContent='🚨 MEETINGS ARE AUTOMATIC · FINISH TASKS';
  const p=state.player,r=state.room;$('#cell-count').classList.add('hidden');$('#repair-count').classList.add('hidden');$('#relay-start').classList.add('hidden');
- (p.notices||[]).forEach(n=>{if(!socialNoticesSeen.has(n.id)){socialNoticesSeen.add(n.id);toast(n.text)}});
+ (p.notices||[]).forEach(n=>{if(!socialNoticesSeen.has(n.id)){socialNoticesSeen.add(n.id);if(n.kind==='shield')showBanner('🛡️',n.text.replace('🛡️ ',''),n.sub||'');else toast(n.text)}});
  if(socialRoundSeen!==r.code+':'+g.round){socialRoundSeen=r.code+':'+g.round;socialRoleVisible=false;pos.x=p.x;pos.y=p.y;keys.clear();socialResultSeen='';}
  if(socialPhaseSeen!==g.phase){
   if(socialPhaseSeen==='meeting'&&g.phase==='playing'){pos.x=p.x;pos.y=p.y;}
