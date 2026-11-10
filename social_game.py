@@ -24,7 +24,7 @@ def configure(room,options):
                   'meetingSeconds':(0 if int(options.get('meetingSeconds',240) or 0)==0 else max(60,min(900,int(options.get('meetingSeconds',240))))),
                   'briefingSeconds':max(10,min(120,int(options.get('briefingSeconds',60) or 60))),'briefingEndsAt':0,'impostorsEjected':0,
                   'interruptChats':bool(options.get('interruptChats',True)),
-                  'tagDelay':max(0,min(60,int(options.get('tagDelay',15) if str(options.get('tagDelay',15)).strip()!='' else 15))),
+                  'tagDelay':(None if str(options.get('tagDelay','auto')).strip().lower() in ('','auto','none') else max(0,min(60,int(float(options.get('tagDelay'))))) ),
                   'discussionSeconds':max(15,min(180,int(options.get('discussionSeconds',30)))),
                   'voteSeconds':max(15,min(300,int(options.get('voteSeconds',30)))),
                   'questionsPerTag':1,
@@ -144,6 +144,11 @@ def resolve_meeting(room):
     g.update(phase='playing',meeting=None,bodies=[],tagsSinceMeeting=0,nextMeetingAt=time.time()+g['meetingSeconds'] if g['meetingSeconds'] else 0)
     for p in room['players'].values():p.update(x=800,y=460,killReadyAt=time.time()+KILL_COOLDOWN,botPath=[],botTarget=None)
     victory(room)
+
+def auto_tag_delay(living):
+    """Average seconds before a tag lands. With more players moving around, more people cross the victim's
+    path, so a shorter delay already blurs who was nearby. About 90/(players-2), kept between 8 and 30 seconds."""
+    return max(8,min(30,round(90/max(1,living-2))))
 
 def land_tags(room,force=False):
     """A delayed tag takes effect: the victim is powered down and everyone sees an alert."""
@@ -280,8 +285,9 @@ def action(room,player,data,walls):
             return
         for witness in room['players'].values():
             if witness.get('bot') and witness.get('alive',True) and witness['id'] not in (player['id'],target['id']) and near(witness,player,230,walls):witness['botSuspect']=player['id']
-        d=g.get('tagDelay',15)
-        target['pendingTag']={'at':now+(random.uniform(.6*d,1.4*d) if d else 0),'by':player['id']}
+        d=g.get('tagDelay')
+        if d is None:d=auto_tag_delay(sum(1 for x in room['players'].values() if x.get('alive',True)))
+        target['pendingTag']={'at':now+(random.uniform(.7*d,1.3*d) if d else 0),'by':player['id']}
         notify(player,'⚡ Tag sent. It lands in a few seconds, so slip away and act natural.' if d else '⚡ Tag landed.')
         player['killReadyAt']=now+KILL_COOLDOWN
         if not d:land_tags(room)
