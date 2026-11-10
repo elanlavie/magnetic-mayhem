@@ -96,3 +96,27 @@
 
 /* briefing: instructions always visible; only the role part is hidden until revealed */
 .brief-card .brief-reveal{margin:0 auto 14px}.brief-card .brief-role{font-size:15px;margin:0 0 4px}.brief-secret{margin-bottom:14px;padding-bottom:10px;border-bottom:1px dashed #5a433b}.brief-secret h3:first-of-type{margin-top:8px}
+
+/* gameplay polish: big question + image, room colors, celebration */
+.encounter-card{max-width:880px!important}
+.qimg{width:100%!important;height:auto!important;max-width:100%!important;max-height:min(46dvh,420px)!important;object-fit:contain;margin:0 auto 12px!important}
+.chatlog{max-height:54dvh!important}
+.bubble.question{font-size:22px;line-height:1.45;font-weight:500;padding:18px 22px}
+.station-entry{border-left:5px solid var(--rc,transparent);padding-left:10px}
+.station-entry .indicator{background:var(--rc,#3f2b25)!important;color:#2a1b15!important;font-weight:700}
+.station-entry.complete{opacity:.55}.station-entry.complete .indicator{background:#3f5c52!important;color:#bff3df!important}
+.boost-meter kbd{padding:1px 6px;border:1px solid #725b52;border-radius:5px;background:#3a2c27;font-size:11px}.boost-meter span{font-size:12px;line-height:1.5}
+#celebrate{position:fixed;inset:0;z-index:90;pointer-events:none;overflow:hidden}
+#celebrate i{position:absolute;top:-50px;font-style:normal;animation:celfall linear forwards}
+@keyframes celfall{to{transform:translateY(115vh) rotate(540deg);opacity:.9}}
+.cel-card{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px;padding:26px 46px;border-radius:26px;background:#1f3d35f2;border:4px solid #8fe0c2;box-shadow:0 0 90px #8fe0c2aa;color:#e9fff6;animation:celpop .55s cubic-bezier(.2,1.6,.4,1)}
+.cel-card b{font:700 46px 'Space Grotesk',sans-serif}.cel-card span{font-size:18px;color:#bff3df}.cel-emoji{font-size:72px;line-height:1}
+@keyframes celpop{from{transform:translate(-50%,-50%) scale(.2);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+@media(max-width:700px){.bubble.question{font-size:18px;padding:14px 16px}.qimg{max-height:30dvh!important}.cel-card{padding:18px 28px}.cel-card b{font-size:34px}}
+@media(prefers-reduced-motion:reduce){.cel-card{animation:none}}
+
+.orbital canvas{position:absolute;inset:0;width:100%;height:100%}
+.say{position:absolute;padding:8px 13px;border-radius:16px 16px 16px 4px;background:#fbf2f0;color:#2a1b15;font:600 12px 'DM Sans',sans-serif;box-shadow:0 6px 24px #0006;animation:saybob 3.4s ease-in-out infinite;white-space:nowrap}
+.say1{left:-6px;top:150px}.say2{right:-4px;top:176px;animation-delay:-1.1s;border-radius:16px 16px 4px 16px;background:#ffd8c6}.say3{left:70px;top:6px;animation-delay:-2.2s;background:#d8fff0}
+@keyframes saybob{50%{transform:translateY(-7px) rotate(-1.5deg)}}
+@media(prefers-reduced-motion:reduce){.say{animation:none}}
