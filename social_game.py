@@ -36,7 +36,7 @@ TAGS_PER_CHAT=2
 SAFE_AFTER_CHAT=4
 
 def impostors_for(n):
-    """Among Us style proportions: 1 impostor for small groups, 2 from 7 players, then about one per 3.5 players."""
+    """Among Us style proportions: 1 imposter for small groups, 2 from 7 players, then about one per 3.5 players."""
     return max(1,int(n/3.5))
 
 def park(player):
@@ -94,8 +94,8 @@ def victory(room):
     done,total=task_counts(room)
     living=[p for p in room['players'].values() if p.get('alive',True)]
     impostors=sum(p.get('role')=='impostor' for p in living);crew=sum(p.get('role')=='crew' for p in living)
-    if not impostors:finish(room,'crew','All impostors were voted out. 🛰️')
-    elif impostors>=crew:finish(room,'impostors','Impostors reached parity with the living crew. ⚡')
+    if not impostors:finish(room,'crew','All imposters were voted out. 🛰️')
+    elif impostors>=crew:finish(room,'impostors','Imposters reached parity with the living crew. ⚡')
     elif total and done>=target_for(room,total):finish(room,'crew','The crew reached its science target! 🧠')
     elif g.get('roundEndsAt') and time.time()>=g['roundEndsAt']:finish(room,'impostors','Time ran out before the crew reached its target. ⏱️')
 
@@ -137,8 +137,8 @@ def resolve_meeting(room):
     results=[{'name':room['players'][k]['name'],'wasImpostor':room['players'][k].get('role')=='impostor'} for k in ejected]
     g['impostorsEjected']=g.get('impostorsEjected',0)+sum(1 for x in results if x['wasImpostor'])
     left=max(0,g['impostorCount']-g['impostorsEjected'])
-    said=' '.join(f'{x["name"]} {"WAS an impostor! 🕵️" if x["wasImpostor"] else "was NOT an impostor. 🧑‍🚀"}' for x in results)
-    tail=f' {left} impostor{"" if left==1 else "s"} left.'
+    said=' '.join(f'{x["name"]} {"WAS an imposter! 🕵️" if x["wasImpostor"] else "was NOT an imposter. 🧑‍🚀"}' for x in results)
+    tail=f' {left} imposter{"" if left==1 else "s"} left.'
     g['lastMeeting']={'id':m['id'],'ejected':ejected,'names':names,'name':', '.join(names) or None,'tally':tally,'needed':needed,'results':results,'impostorsLeft':left,'at':time.time(),
                       'message':(f'{said}{tail} Voted-out players keep learning as ghosts. 👻') if names else f'Nobody reached {needed} votes, so nobody was voted out.{tail}'}
     if g.get('roundEndsAt'):g['roundEndsAt']+=time.time()-m['started']
@@ -277,7 +277,7 @@ def action(room,player,data,walls):
     if g['phase']!='playing':raise SocialError('The round starts when the role briefing ends.' if g['phase']=='briefing' else 'Wait for the teacher to start, or for this meeting to finish.')
     if not player.get('alive',True):raise SocialError('You are a ghost. Your science tasks still help the crew; game interventions are disabled.')
     if kind=='tag':
-        if player.get('role')!='impostor':raise SocialError('Only impostors can tag players.')
+        if player.get('role')!='impostor':raise SocialError('Only imposters can tag players.')
         if player.get('active'):raise SocialError('Leave your conversation before tagging someone.')
         if now<player.get('killReadyAt',0):raise SocialError('Your tag cooldown is still running.')
         need=g['questionsPerTag'];charge=player.get('tagCharge',0)
@@ -290,8 +290,8 @@ def action(room,player,data,walls):
         if target.get('shield',0)>0:
             target['shield']-=1;player['killReadyAt']=now+KILL_COOLDOWN/2
             wait=tag_delay_seconds(room)
-            if wait:target['pendingNotice']={'at':now+wait,'text':'🛡️ Your shield blocked a tag!','kind':'shield','sub':'Someone nearby was an impostor. Remember who was close a few seconds ago.'}
-            else:notify(target,'🛡️ Your shield blocked a tag!','shield','Someone nearby is an impostor. Remember who was close.')
+            if wait:target['pendingNotice']={'at':now+wait,'text':'🛡️ Your shield blocked a tag!','kind':'shield','sub':'Someone nearby was an imposter. Remember who was close a few seconds ago.'}
+            else:notify(target,'🛡️ Your shield blocked a tag!','shield','Someone nearby is an imposter. Remember who was close.')
             notify(player,'🛡️ Blocked! That crewmate had a shield.','shield','Your tag charge was used up. Try again after a short cooldown.')
             return
         for witness in room['players'].values():
@@ -395,7 +395,7 @@ def bot_tick(room):
             targets=[t for t in room['players'].values() if t.get('alive',True) and t.get('role')=='crew']
             if targets and now>=p.get('killReadyAt',0):
                 if p.get('tagCharge',0)<g['questionsPerTag']:
-                    # Bots "study" for a while to power up their tag, like a human impostor must.
+                    # Bots "study" for a while to power up their tag, like a human imposter must.
                     if not p.get('botChargeAt'):p['botChargeAt']=now+15+secrets.randbelow(15)
                     elif now>=p['botChargeAt']:p['tagCharge']=p.get('tagCharge',0)+TAGS_PER_CHAT;p['botChargeAt']=0;changed=True
                 else:

@@ -38,29 +38,29 @@ Open Mission control, enter the teacher access code, review the topic pack, and 
 
 Choose co-op or two-team race and optionally allow independent solo study using the room code. The dashboard tracks explanations and repairs. TXT/Markdown/JSON imports are built in; PDF and DOCX text extraction use the dependencies in `requirements.txt`. Review AI-generated questions and reference answers before classroom use.
 
-## 🕵️ Impostor missions
+## 🕵️ Imposter missions
 
-In Mission control, choose **Impostor mission** (the default), select 1–3 impostors,
+In Mission control, choose **Imposter mission** (the default), select 1–3 imposters,
 1–7 science conversations per crewmate, and separate discussion/voting durations.
 New rooms begin in a lobby. Students join before the teacher clicks **Assign roles
-& start round**. Minimum players: 4 for one impostor, 7 for two, 10 for three.
+& start round**. Minimum players: 4 for one imposter, 7 for two, 10 for three.
 Automatic fun names remain available. Teachers can remove lobby participants and
 end or restart rounds. Teacher-only role spoilers should stay off the projector.
 
 - Crewmates win by finishing every assigned Sonnet conversation (including ghost
-  tasks) or by voting out all impostors. These conversations are the actual tasks;
+  tasks) or by voting out all imposters. These conversations are the actual tasks;
   collecting cells and installing repairs are not required in this mode.
-- Impostors have real science conversations as cover, but their practice does not
+- Imposters have real science conversations as cover, but their practice does not
   advance the crew task bar. They win by reaching parity with the living crew or
   by letting a reactor sabotage expire.
-- Impostors can tag nearby crewmates with clear line of sight, but each tag must be
+- Imposters can tag nearby crewmates with clear line of sight, but each tag must be
   powered up by finishing real science conversations (default 2, teacher-adjustable
   from 1 to 5; every correct conversation counts, including repeats). A 30-second
   cooldown also applies at round start, after a tag, and after meetings. Tags are
-  non-graphic. Solo bot impostors simulate this by "studying" before they tag.
+  non-graphic. Solo bot imposters simulate this by "studying" before they tag.
 - **Shields:** once a crewmate has finished their assigned tasks, each extra correct
   conversation earns a shield (maximum 2). A shield blocks one tag attempt: the
-  crewmate is told someone nearby tried to tag them, the impostor is told the tag was
+  crewmate is told someone nearby tried to tag them, the imposter is told the tag was
   blocked (and gets a shorter cooldown), and nobody is eliminated. Shield counts are
   private. Extra conversations never advance the crew task bar.
 - Living players can report nearby downed explorers. Each living player also gets
@@ -83,8 +83,8 @@ end or restart rounds. Teacher-only role spoilers should stay off the projector.
   same academic points twice. Assigned conversations can count for a new round
   even when the underlying concept was completed in an earlier round.
 
-**Solo bot practice:** Study solo offers an impostor practice game with five
-computer-controlled players, with a choice of crewmate, impostor, or random role.
+**Solo bot practice:** Study solo offers an imposter practice game with five
+computer-controlled players, with a choice of crewmate, imposter, or random role.
 Bots navigate walls, simulate time spent doing tasks, tag, sabotage, repair,
 report, and vote. Crew bots vote from what they observed; otherwise they skip.
 They are explicitly labeled bots. Their task completion is game simulation, not
