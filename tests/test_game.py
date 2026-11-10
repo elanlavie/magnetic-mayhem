@@ -67,6 +67,16 @@ class GameTests(unittest.TestCase):
         r=self.mc_chat(auth,p,1,'Domains line up so the field points one way')['player']['active'];self.assertTrue(r['done'])
     def test_free_response_pack_ignores_choices(self):
         auth,p,a=self.mc_player({'mc':False,'free':True});self.assertEqual(a['mode'],'free');self.assertEqual(a['choices'],[])
+    def test_generate_makes_exactly_the_requested_number_of_stations(self):
+        seen=[]
+        def fake(system,data,max_tokens=650,wait=None):
+            if 'topic' not in data:
+                seen.append(system);return {'title':'T','topics':[{'name':'N%d'%i,'icon':'x','focus':'f'} for i in range(7)]}
+            return {'questions':[{'prompt':'Q?','answer':'a','hint':'h'}]}
+        with patch.object(game,'ai',side_effect=fake):
+            r=game.dispatch('/api/generate',{'text':'magnets','count':3,'teacherKey':'teacher-test'})
+            self.assertEqual(len(r['pack']['topics']),3);self.assertIn('exactly 3 topic stations',seen[-1])
+            r=game.dispatch('/api/generate',{'text':'magnets','count':'junk','teacherKey':'teacher-test'});self.assertEqual(len(r['pack']['topics']),5)
     def test_public_state_hides_keys_and_answers(self):
         r=game.dispatch('/api/state',self.auth); text=json.dumps(r['room']);self.assertNotIn(self.auth['token'],text);self.assertNotIn(self.created['host'],text);self.assertNotIn('terms',text);self.assertNotIn('questions',text)
     def ans(self):
