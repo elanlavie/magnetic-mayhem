@@ -112,11 +112,14 @@ class SocialTests(unittest.TestCase):
     def test_vote_threshold_uses_impostors_left(self):
         self.g['impostorCount']=3;self.g['impostorsEjected']=2
         social.meeting(self.room,None,'t');self.assertEqual(self.g['meeting']['needed'],2);self.assertEqual(self.g['meeting']['maxVotes'],1)
+    def test_tag_delay_zero_is_instant(self):
+        self.g['tagDelay']=0;self.imp.update(x=800,y=460,tagCharge=2,killReadyAt=0);self.crew[0].update(x=830,y=460)
+        self.act(self.imp,'tag',target=self.crew[0]['id']);self.assertFalse(self.crew[0]['alive'])
     def test_tag_is_delayed_and_announced(self):
         self.imp.update(x=800,y=460,tagCharge=2,killReadyAt=0);self.crew[0].update(x=830,y=460)
         self.act(self.imp,'tag',target=self.crew[0]['id'])
         t=self.crew[0];self.assertTrue(t['alive']);self.assertEqual(self.g['penalty'],0);self.assertEqual(self.g['tagFeed'],[])
-        delay=t['pendingTag']['at']-time.time();self.assertTrue(19<delay<=40)
+        delay=t['pendingTag']['at']-time.time();self.assertTrue(8<delay<=21.1)  # default 15s average
         social.advance(self.room);self.assertTrue(t['alive'])  # not yet
         t['pendingTag']['at']=time.time()-1;social.advance(self.room)
         self.assertFalse(t['alive']);self.assertEqual(self.g['tagFeed'][-1]['name'],t['name']);self.assertEqual(self.g['penalty'],social.KILL_PENALTY)

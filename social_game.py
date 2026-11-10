@@ -15,7 +15,6 @@ KILL_COOLDOWN=20
 KILL_PENALTY=2
 MAX_EJECT=3
 MAX_SUSPECTS=3
-TAG_DELAY=(20,40)  # seconds before a tag lands, so a victim cannot tie it to whoever stood nearby
 MAX_SHIELDS=2
 
 def configure(room,options):
@@ -25,6 +24,7 @@ def configure(room,options):
                   'meetingSeconds':(0 if int(options.get('meetingSeconds',240) or 0)==0 else max(60,min(900,int(options.get('meetingSeconds',240))))),
                   'briefingSeconds':max(10,min(120,int(options.get('briefingSeconds',60) or 60))),'briefingEndsAt':0,'impostorsEjected':0,
                   'interruptChats':bool(options.get('interruptChats',True)),
+                  'tagDelay':max(0,min(60,int(options.get('tagDelay',15) if str(options.get('tagDelay',15)).strip()!='' else 15))),
                   'discussionSeconds':max(15,min(180,int(options.get('discussionSeconds',30)))),
                   'voteSeconds':max(15,min(300,int(options.get('voteSeconds',30)))),
                   'questionsPerTag':1,
@@ -280,9 +280,11 @@ def action(room,player,data,walls):
             return
         for witness in room['players'].values():
             if witness.get('bot') and witness.get('alive',True) and witness['id'] not in (player['id'],target['id']) and near(witness,player,230,walls):witness['botSuspect']=player['id']
-        target['pendingTag']={'at':now+random.uniform(*TAG_DELAY),'by':player['id']}
-        notify(player,'⚡ Tag sent. It lands in 20 to 40 seconds, so slip away and act natural.')
+        d=g.get('tagDelay',15)
+        target['pendingTag']={'at':now+(random.uniform(.6*d,1.4*d) if d else 0),'by':player['id']}
+        notify(player,'⚡ Tag sent. It lands in a few seconds, so slip away and act natural.' if d else '⚡ Tag landed.')
         player['killReadyAt']=now+KILL_COOLDOWN
+        if not d:land_tags(room)
     else:raise SocialError('Unknown round action.')
 
 def next_question(room,player,topic):
@@ -299,7 +301,7 @@ def record_task(room,player,qid):
 
 def public(room):
     g=room['game'];now=time.time();done,total=task_counts(room)
-    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','tagFeed','lastMeeting','nextMeetingAt','meetingSeconds','interruptChats','briefingSeconds','briefingEndsAt','impostorsEjected','writtenDiscussion','questionsPerTag','roundSeconds','crewTargetPct','roundEndsAt')}
+    result={k:g[k] for k in ('phase','round','impostorCount','tasksPerCrew','discussionSeconds','voteSeconds','winner','reason','bodies','tagFeed','tagDelay','lastMeeting','nextMeetingAt','meetingSeconds','interruptChats','briefingSeconds','briefingEndsAt','impostorsEjected','writtenDiscussion','questionsPerTag','roundSeconds','crewTargetPct','roundEndsAt')}
     result['summary']=g.get('summary') if g['phase']=='ended' else None;result['crewPenalty']=g.get('penalty',0);result['impostorsLeft']=max(0,g['impostorCount']-g.get('impostorsEjected',0));result['briefReady']=sum(1 for p in room['players'].values() if not p.get('bot') and p.get('briefReady'));result['briefHumans']=sum(1 for p in room['players'].values() if not p.get('bot'))
     result.update(botPractice=bool(room.get('botPractice')),serverNow=now,crewTasksDone=done,crewTasksTotal=total,crewTasksTarget=target_for(room,total) if total else 0,minimumPlayers=MIN_PLAYERS,impostorsIfStartedNow=impostors_for(len(room['players'])))
     m=g.get('meeting');result['meeting']=None
