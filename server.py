@@ -431,7 +431,7 @@ def dispatch(path,d):
             if not r or not secrets.compare_digest(r['host'],str(d.get('host',''))): raise GameError('Teacher session not found.')
             action=d.get('action')
             if action=='startRound':
-                if not r.get('game'):raise GameError('Select Impostor mission to start rounds.')
+                if not r.get('game'):raise GameError('Select Imposter mission to start rounds.')
                 social.start(r)
             if action=='endRound' and r.get('game'):social.finish(r,'teacher','The teacher ended this round. Your learning is saved.')
             if action=='removePlayer':
@@ -467,7 +467,7 @@ def dispatch(path,d):
             p['active']=None; save(); return snapshot(r,p)
         if r['paused'] or r.get('closed'): raise GameError('This game is paused or closed by the teacher.')
         if path=='/api/round':
-            if not r.get('game'):raise GameError('This room is not an impostor round.')
+            if not r.get('game'):raise GameError('This room is not an imposter round.')
             social.action(r,p,d,WALLS);save();return snapshot(r,p)
         if r.get('game') and r['game']['phase'] in ('lobby','briefing'):raise GameError('Wait for the teacher to start the round. Your chat is saved.' if r['game']['phase']=='lobby' else 'Read your role briefing: the round starts in a moment.')
         if r.get('game') and r['game']['phase']=='meeting' and r['game'].get('interruptChats',True) and path in ('/api/start','/api/chat','/api/hint'):raise GameError('Meeting in progress: talk it over with your class and vote. Your chats are saved.')
@@ -497,7 +497,7 @@ def dispatch(path,d):
             base=t['questions'][qi];vi=secrets.randbelow(len(base.get('variants') or [])+1);q=resolve_question(base,vi)
             p['active']={'id':secrets.token_hex(8),'topic':topic,'index':qi,'vi':vi,'prompt':q['prompt'],'choices':q.get('choices') or [],'mode':answer_mode(r['pack'],q),'image':q.get('image') or '','think':think_seconds(q,answer_mode(r['pack'],q)),'messages':[{'role':'assistant','text':q['prompt']}],'attempts':0,'repair':False,'done':False,'busy':False,'practice':practice}
             save(); return snapshot(r,p)
-        if path in ('/api/relay','/api/repair') and r.get('game'):raise GameError('In impostor mode, complete your assigned chatbot conversations to advance the crew task bar.')
+        if path in ('/api/relay','/api/repair') and r.get('game'):raise GameError('In imposter mode, complete your assigned chatbot conversations to advance the crew task bar.')
         if path=='/api/relay':
             records=p.setdefault('relayRecords',{})
             if d.get('action')=='start':

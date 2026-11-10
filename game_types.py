@@ -10,7 +10,7 @@ DEFAULT='station'
 
 GAME_TYPES={
     'station':{'name':'Space station','icon':'🚀',
-               'summary':'Among Us-style impostor missions, cooperative rescue, or a two-team race. Every task is a chat with the ship engineer.',
+               'summary':'Among Us-style imposter missions, cooperative rescue, or a two-team race. Every task is a chat with the ship engineer.',
                'available':True,'modes':('solo','coop','race','infiltration','impostorSolo')},
     'climb':{'name':'Tower climb','icon':'🧗',
              'summary':'Gimkit-style obstacle course: climb higher by explaining your reasoning to the chatbot.',
