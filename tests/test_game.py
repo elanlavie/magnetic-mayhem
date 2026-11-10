@@ -121,6 +121,14 @@ class UpgradeTests(unittest.TestCase):
     start=GameTests.start
     chat=GameTests.chat
     fake_ai=staticmethod(GameTests.fake_ai)
+    def test_grade_level_is_validated_and_reaches_the_tutor(self):
+        r=game.dispatch('/api/create',{'mode':'coop','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test','grade':'7th grade'});self.assertEqual(game.ROOMS[r['code']]['grade'],'7th grade')
+        r=game.dispatch('/api/create',{'mode':'coop','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test','grade':'<script>'});self.assertEqual(game.ROOMS[r['code']]['grade'],'9th grade')
+        pk=copy.deepcopy(game.BUILTIN);pk['grade']='11th grade';r=game.dispatch('/api/create',{'mode':'coop','pack':pk,'teacherKey':'teacher-test'});self.assertEqual(game.ROOMS[r['code']]['grade'],'11th grade')  # a saved pack carries its grade
+        self.auth={'code':r['code']};j=game.dispatch('/api/join',{**self.auth,'name':'Ada'});self.auth['token']=j['token'];self.p=game.ROOMS[r['code']]['players'][j['player']['id']];self.p['x'],self.p['y']=game.POSITIONS[0]
+        game.dispatch('/api/start',{**self.auth,'topic':0});self.p['cells']=1;self.chat(kind='hint')
+        system,data=game.ai.call_args[0][0],game.ai.call_args[0][1]
+        self.assertIn('11th grade',system);self.assertNotIn('{GRADE}',system);self.assertEqual(data['grade_level'],'11th grade')
     def test_solo_cannot_turn_off_claude(self):
         r=game.dispatch('/api/create',{'mode':'solo','live':False})
         self.assertTrue(game.ROOMS[r['code']]['ai'])
