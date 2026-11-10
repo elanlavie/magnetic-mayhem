@@ -165,3 +165,5 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 .panel h2{font-family:'Fredoka',sans-serif;font-weight:600;font-size:20px}
 .stars{background-image:radial-gradient(#ffb74d55 2px,transparent 2.5px),radial-gradient(#4dd0e155 2px,transparent 2.5px),radial-gradient(#ce93d855 2px,transparent 2.5px),radial-gradient(#9ccc6555 2px,transparent 2.5px)!important;background-size:131px 131px,173px 173px,211px 211px,97px 97px!important;background-position:0 0,40px 60px,90px 20px,20px 80px!important}
 .encounter-head h2,.modal-card h2{font-family:'Fredoka',sans-serif;font-weight:600}
+
+#boost-fill.locked{background:#e05a5a!important;opacity:.85}
