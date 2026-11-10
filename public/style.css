@@ -222,3 +222,4 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 .shield-badge.on{background:#1f5f8f99;border-color:#5ec8ff;box-shadow:0 0 18px #5ec8ff66}
 .shield-note{font-size:13px;color:#e7c7c2;flex:1;min-width:220px}
 .tag-alert.shield{background:#0f2b45;border-color:#5ec8ff;box-shadow:0 10px 40px #000a,0 0 30px #5ec8ff88}
+.grade-tag{display:inline-block;padding:2px 10px;border-radius:99px;background:#ffb59126;border:1px solid #ffb591;color:#ffd0ba;font-size:12px;font-weight:700}

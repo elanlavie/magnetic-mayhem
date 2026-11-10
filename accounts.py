@@ -546,6 +546,7 @@ def _pack_summary(r, class_names=None):
         ids = list((class_names or {}).keys())
     return {'allClasses': every, 'id': r['id'], 'title': r['title'], 'created': r['created'],
             'topics': len(data.get('topics', [])), 'questions': sum(len(t.get('questions', [])) for t in data.get('topics', [])),
+            'grade': str(data.get('grade') or '')[:30],
             'classes': [{'id': i, 'name': (class_names or {}).get(i, '')} for i in ids]}
 
 
