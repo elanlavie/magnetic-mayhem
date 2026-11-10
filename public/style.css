@@ -221,3 +221,4 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 .shield-badge b{font-size:1.3em}
 .shield-badge.on{background:#1f5f8f99;border-color:#5ec8ff;box-shadow:0 0 18px #5ec8ff66}
 .shield-note{font-size:13px;color:#e7c7c2;flex:1;min-width:220px}
+.tag-alert.shield{background:#0f2b45;border-color:#5ec8ff;box-shadow:0 10px 40px #000a,0 0 30px #5ec8ff88}

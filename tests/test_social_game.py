@@ -192,7 +192,7 @@ class SocialTests(unittest.TestCase):
         self.finish_chat(c,topic=int(c['roundTasks'][0].split(':')[0]));self.assertEqual(c['shield'],1);self.assertEqual(social.task_counts(self.room),before)
         self.imp.update(killReadyAt=0,tagCharge=2,x=800,y=460);c.update(x=830,y=460,safeUntil=0)
         self.act(self.imp,'tag',target=c['id']);self.assertTrue(c['alive']);self.assertEqual(c['shield'],0);self.assertEqual(self.g['bodies'],[])
-        self.assertTrue(any('shield' in n['text'].lower() for n in c['notices']));self.assertTrue(any('blocked' in n['text'] for n in self.imp['notices']))
+        self.assertTrue(any('shield' in n['text'].lower() for n in c['notices']));self.assertTrue(any('blocked' in n['text'].lower() for n in self.imp['notices']))
         self.assertEqual(self.imp['tagCharge'],1);self.assertTrue(self.imp['killReadyAt']>time.time())
         self.assertNotIn('notices',json.dumps(game.room_public(self.room)))
     def test_assigned_chats_give_no_shield_and_shields_cap_at_two(self):
