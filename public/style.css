@@ -195,3 +195,11 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 .tag-alert{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:60;display:flex;gap:12px;align-items:center;max-width:92vw;padding:14px 22px;border-radius:16px;background:#2b1a3a;border:3px solid #e040fb;color:#fff;box-shadow:0 10px 40px #000a,0 0 30px #e040fb88;animation:tagin .35s ease-out}
 .tag-alert span{font-size:34px}.tag-alert b{display:block;font:700 19px 'Fredoka',sans-serif}.tag-alert small{opacity:.8}
 @keyframes tagin{from{transform:translate(-50%,-30px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+.timeup-overlay{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;background:#2b0f0f}
+.timeup-box{text-align:center;max-width:760px;width:100%}
+.timeup-clock{font-size:clamp(90px,22vw,170px);line-height:1;animation:tuwob .6s ease-in-out 2}
+.timeup-box h2{font:700 clamp(44px,11vw,96px)/1.05 'Fredoka',sans-serif;color:#ff8a80;margin:10px 0 18px;letter-spacing:-1px}
+.timeup-main{font-size:clamp(22px,5vw,34px)!important;font-weight:800;color:#fff!important;line-height:1.3;margin:0 0 14px}
+.timeup-sub{font-size:clamp(17px,3.6vw,24px)!important;color:#ffd9d0!important;line-height:1.45;margin:0 0 28px}
+.timeup-box button{font-size:clamp(20px,4.5vw,28px)!important;padding:18px 34px!important;border-radius:16px!important}
+@keyframes tuwob{0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg)}75%{transform:rotate(12deg)}}

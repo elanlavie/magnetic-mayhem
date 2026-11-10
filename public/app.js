@@ -90,8 +90,8 @@ function renderTimer(){if(!state?.player.active)return;const a=state.player.acti
  if(blocked)pauseTimer();else if(!timerActive&&!session.relaxed)resumeTimer();
  const remain=timerActive?Math.max(0,timerDeadline-Date.now()):timerRemaining;$('#timer').textContent=session.relaxed?'∞':`${Math.floor(Math.ceil(remain/1000)/60)}:${String(Math.ceil(remain/1000)%60).padStart(2,'0')}`;
  $('#timer-label').textContent=a.done?'⚡ UNDERSTANDING UNLOCKED':pendingChats.has(a.id)||a.busy?'🧠 THINKING':blocked?'PAUSED':session.relaxed?'RELAXED MODE':'YOUR NEXT MOVE';
- $('.countdown').classList.toggle('urgent',remain<10000&&!session.relaxed);$('.countdown').classList.toggle('expired',remain<=0&&!session.relaxed);$('#timeup').classList.toggle('hidden',remain>0||session.relaxed||a.done||blocked);
- if(remain<=0&&!session.relaxed&&!blocked&&!a.done){if(!expiredAt)expiredAt=Date.now();const left=Math.ceil((12000-(Date.now()-expiredAt))/1000);$('#timeup-left').textContent=Math.max(0,left);if(left<=0){expiredAt=0;leaveChat('⏰ Time’s up! You were sent back to the map.');timeUpNotice()}}else expiredAt=0;
+ $('.countdown').classList.toggle('urgent',remain<10000&&!session.relaxed);$('.countdown').classList.toggle('expired',remain<=0&&!session.relaxed);$('#timeup').classList.add('hidden');
+ if(remain<=0&&!session.relaxed&&!blocked&&!a.done&&!timeUpOpen)timeUpNotice(a.id);
 }
 async function moreTime(){const a=state?.player.active;if(!a)return;const key='mm-more-'+a.id,used=storageGet(key,0);if(used>=3)return toast('You have used all three extra minutes for this question. Try a Hint instead.');
  try{const data=await api('/api/moretime',auth({challenge:a.id}));state=data;updateHUD();storageSet(key,used+1);const add=30000;if(timerActive)timerDeadline+=add;else timerRemaining+=add;if(Math.max(0,(timerActive?timerDeadline-Date.now():timerRemaining))<=0)startTimer(30);expiredAt=0;timerSave();renderTimer();toast('⏱️ +30 seconds (cost 1 ⚡)')}catch(e){toast(e.message)}}
@@ -114,7 +114,8 @@ function syncEncounter(force=false){const a=state?.player.active;if(!a||view!=='
  if(a.done&&!doneSeen){doneSeen=true;if(a.celebrate)celebrate(a.points);toast(state.room.game?'✅ Conversation completed. Your learning is saved!':'⚡ Understanding unlocked! +1 energy cell. Keep exploring!');}
  renderTimer();
 }
-function timeUpNotice(){modal(`<div class="timeup-big">⏰</div><h2>Time’s up!</h2><p><b>The timer ran out, so the game sent you back to the map.</b> Nothing is broken.</p><p>Your chat is saved. Walk back to the room and press Enter (or tap Talk) to keep going.</p><button id="timeup-ok" class="primary wide">Got it</button>`);$('#timeup-ok').onclick=()=>{closeModal();canvas.focus()}}
+let timeUpOpen=false;
+function timeUpNotice(id){timeUpOpen=true;pauseTimer();const el=document.createElement('div');el.id='timeup-overlay';el.className='timeup-overlay';el.setAttribute('role','alertdialog');el.setAttribute('aria-modal','true');el.innerHTML=`<div class="timeup-box"><div class="timeup-clock">⏰</div><h2>TIME’S UP!</h2><p class="timeup-main">The timer ran out, so you are being sent back to the map.</p><p class="timeup-sub">Nothing is broken. Your chat is saved. Walk back to the room and press Enter to try again.</p><button id="timeup-ok" class="primary">OK, back to the map</button></div>`;document.body.appendChild(el);$('#timeup-ok').focus();$('#timeup-ok').onclick=async()=>{el.remove();timeUpOpen=false;await leaveChat('');storageSet('mm-timer-'+id,null);canvas.focus()}}
 async function leaveChat(why){closeSim();const a=state?.player.active;if(!a){$('#encounter').classList.add('hidden');return;}toast(why||'💾 Chat saved. Walk back to the station and press Enter to continue.');
  const epoch=++encounterEpoch;reqId=null;storageSet('mm-draft-'+a.id,$('#answer').value);pauseTimer();keys.clear();$('#encounter').classList.add('hidden');state.player.active=null;activeId='';sending=false;canvas.focus();
  try{const data=await api('/api/leave',auth());if(epoch===encounterEpoch){state=data;updateHUD()}}catch(e){toast('Your conversation is saved. Reconnecting…');await poll();}
