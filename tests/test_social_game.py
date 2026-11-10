@@ -109,6 +109,9 @@ class SocialTests(unittest.TestCase):
         g['bodies'].append({'id':'x','name':'Ghost','x':bot['x'],'y':bot['y']})
         for _ in range(5):g['lastBotAt']=time.time()-1;social.advance(r)
         self.assertEqual(g['phase'],'playing');self.assertEqual(g['meetingCount'],0)
+    def test_vote_threshold_uses_impostors_left(self):
+        self.g['impostorCount']=3;self.g['impostorsEjected']=2
+        social.meeting(self.room,None,'t');self.assertEqual(self.g['meeting']['needed'],2);self.assertEqual(self.g['meeting']['maxVotes'],1)
     def test_tag_is_delayed_and_announced(self):
         self.imp.update(x=800,y=460,tagCharge=2,killReadyAt=0);self.crew[0].update(x=830,y=460)
         self.act(self.imp,'tag',target=self.crew[0]['id'])
