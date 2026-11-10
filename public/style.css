@@ -93,3 +93,6 @@
 @media(max-width:700px){.answer-style{grid-template-columns:1fr}}
 
 .short-input{max-width:110px}
+
+/* briefing: instructions always visible; only the role part is hidden until revealed */
+.brief-card .brief-reveal{margin:0 auto 14px}.brief-card .brief-role{font-size:15px;margin:0 0 4px}.brief-secret{margin-bottom:14px;padding-bottom:10px;border-bottom:1px dashed #5a433b}.brief-secret h3:first-of-type{margin-top:8px}
