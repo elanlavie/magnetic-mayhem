@@ -49,12 +49,14 @@ class GameTests(unittest.TestCase):
         auth,p,a=self.mc_player({'mc':True,'free':False});self.assertEqual(a['mode'],'mc');self.assertEqual(len(a['choices']),4);self.assertNotIn('correct',a)
         self.ai_patch.stop();calls=[];self.ai_patch=patch.object(game,'ai',side_effect=lambda *x,**k:calls.append(1));self.ai_patch.start()
         with self.assertRaises(game.GameError):self.mc_chat(auth,p)
-        r=self.mc_chat(auth,p,0)['player']['active'];self.assertFalse(r['done']);self.assertEqual(r['attempts'],1)
-        r=self.mc_chat(auth,p,1)['player']['active'];self.assertTrue(r['done']);self.assertEqual(p['score'],.5);self.assertEqual(calls,[])
-    def test_mc_only_three_misses_reveal_answer_for_no_points(self):
-        auth,p,a=self.mc_player({'mc':True,'free':False})
-        for c in (0,2,3):r=self.mc_chat(auth,p,c)['player']['active']
-        self.assertTrue(r['done']);self.assertEqual(p['score'],0);self.assertIn('B) B two',r['messages'][-1]['text'])
+        r=self.mc_chat(auth,p,1)['player']['active'];self.assertTrue(r['done']);self.assertEqual(p['score'],1);self.assertEqual(calls,[])
+    def test_mc_only_miss_explains_ends_the_question_and_never_repeats(self):
+        auth,p,a=self.mc_player({'mc':True,'free':False});cells=p['cells']
+        r=self.mc_chat(auth,p,0)['player']['active'];self.assertTrue(r['done']);self.assertEqual(p['score'],0);self.assertEqual(p['cells'],cells)
+        txt=r['messages'][-1]['text'];self.assertIn('B) B two',txt);self.assertIn('Because B is right.',txt);self.assertEqual(p['completed'],['0:0'])
+        game.dispatch('/api/leave',auth);p['x'],p['y']=game.POSITIONS[0]
+        again=game.dispatch('/api/start',{**auth,'topic':0})['player']['active'];self.assertTrue(again['messages'][0]['text']!='' )
+        self.assertEqual(game.ROOMS[auth['code']]['players'][p['id']]['completed'],['0:0'])
     def test_both_needs_choice_and_reasoning_and_wrong_choice_cannot_pass(self):
         auth,p,a=self.mc_player({'mc':True,'free':True});self.assertEqual(a['mode'],'both')
         seen=[];self.ai_patch.stop();self.ai_patch=patch.object(game,'ai',side_effect=lambda s,d,*x,**k:seen.append(d) or {'status':'correct','feedback':'Great!'});self.ai_patch.start()

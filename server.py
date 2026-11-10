@@ -553,7 +553,7 @@ def dispatch(path,d):
             if mode=='mc':
                 text=label
                 ok=picked==q.get('correct')
-                local={'status':'correct' if ok else 'incorrect','safety':'none','feedback':('✅ Yes! '+q['answer'][:600]) if ok else 'Not quite. Look at the choices again, or spend a ⚡ on a hint. 🤔'}
+                local={'status':'correct' if ok else 'incorrect','safety':'none','feedback':('✅ Yes! '+q['answer'][:600]) if ok else 'Not quite.'}
             else:
                 if len(text.split())<4: raise GameError('Explain your reasoning in a sentence or two. A choice alone does not count.')
                 text=label+'\nMy reasoning: '+text
@@ -571,9 +571,11 @@ def dispatch(path,d):
         with LOCK:
             a['busy']=False; a['messages'].append({'role':'user','text':text if kind=='answer' else ('Hint, please.' if kind=='hint' else 'Show a worked explanation.')})
             if kind=='hint': p['cells']=max(0,p['cells']-1)
-            if local and result['status']=='incorrect' and a['attempts']+1>=3:
+            mcmiss=bool(local and result['status']=='incorrect')
+            if mcmiss:
+                # multiple choice gets one shot: explain, award nothing, and never ask this question again
                 a['attempts']+=1;a['repair']=True;result['status']='correct'
-                result['feedback']='The answer was '+'ABCDE'[q.get('correct',0)]+') '+q['choices'][q.get('correct',0)]+'. '+q['answer'][:600]+' (No points this time. Nice persistence!)'
+                result['feedback']='Not quite. The answer was '+'ABCDE'[q.get('correct',0)]+') '+q['choices'][q.get('correct',0)]+'.\n'+q['answer'][:700]
             if kind=='solution': a['repair']=True
             elif result['status']=='incorrect':
                 if not a['repair']: a['attempts']+=1
@@ -583,7 +585,7 @@ def dispatch(path,d):
                 points=0 if a['repair'] else [1,.5,.25][min(a['attempts'],2)]
                 qid=f"{a['topic']}:{a['index']}"
                 if qid not in p['completed'] and (not a.get('practice') or r.get('game')):
-                    p['completed'].append(qid); p['score']+=points; p['cells']+=1
+                    p['completed'].append(qid); p['score']+=points; p['cells']+=0 if mcmiss else 1
                     p['history'].append({'question':qid,'points':points,'supported':a['repair'],'topic':r['pack']['topics'][a['topic']]['name']})
                 if r.get('game') and chat_round==p.get('socialRound'):social.conversation_completed(r,p,qid);social.record_task(r,p,qid)
                 a['done']=True
