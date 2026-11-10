@@ -26,6 +26,45 @@ class GameTests(unittest.TestCase):
     def chat(self,text='',kind='answer',rid=None):
         if kind=='hint' and not self.p['cells']:self.p['cells']=1  # a hint spends one ⚡ cell
         return game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':rid or str(uuid.uuid4()),'kind':kind,'text':text})
+    def mc_player(self,fmt):
+        q=lambda i:{'prompt':'Which is right %d?'%i,'answer':'Because B is right.','hint':'think','choices':['A one','B two','C three','D four'],'correct':1}
+        pack={'title':'MC','format':fmt,'topics':[{'name':'T%d'%i,'icon':'🧲','questions':[q(i)]} for i in range(2)]}
+        c=game.dispatch('/api/create',{'mode':'coop','pack':pack,'teacherKey':'teacher-test'})
+        auth={'code':c['code']};j=game.dispatch('/api/join',{**auth,'name':'Mo'});auth['token']=j['token']
+        p=game.ROOMS[c['code']]['players'][j['player']['id']];p['x'],p['y']=game.POSITIONS[0]
+        a=game.dispatch('/api/start',{**auth,'topic':0})['player']['active']
+        return auth,p,a
+    def mc_chat(self,auth,p,choice=None,text=''):
+        d={**auth,'challenge':p['active']['id'],'requestId':str(uuid.uuid4()),'kind':'answer','text':text}
+        if choice is not None:d['choice']=choice
+        return game.dispatch('/api/chat',d)
+    def test_pack_format_defaults_and_choice_cleaning(self):
+        self.assertEqual(game.clean_format(None),{'mc':False,'free':True});self.assertEqual(game.clean_format({'mc':False,'free':False}),{'mc':False,'free':True});self.assertEqual(game.clean_format({'mc':True,'free':False}),{'mc':True,'free':False})
+        base=lambda fmt:{'title':'x','format':fmt,'topics':[{'name':'t','questions':[{'prompt':'p','answer':'a','hint':'h','choices':['a','b','c'],'correct':1},{'prompt':'p','answer':'a','hint':'h','choices':['a'],'correct':5}]}]}
+        free=game.validate_pack(base(None));self.assertNotIn('choices',free['topics'][0]['questions'][0])
+        mc=game.validate_pack(base({'mc':True,'free':False}));qs=mc['topics'][0]['questions'];self.assertEqual(qs[0]['choices'],['a','b','c']);self.assertNotIn('choices',qs[1])
+    def test_generator_prompt_asks_for_choices_only_when_mc(self):
+        self.assertIn('"choices":[string]',game.topic_prompt('9th grade',True));self.assertNotIn('"choices"',game.topic_prompt('9th grade',False));self.assertIn('9th grade',game.topic_prompt('9th grade',False))
+    def test_mc_only_is_graded_instantly_without_the_tutor(self):
+        auth,p,a=self.mc_player({'mc':True,'free':False});self.assertEqual(a['mode'],'mc');self.assertEqual(len(a['choices']),4);self.assertNotIn('correct',a)
+        self.ai_patch.stop();calls=[];self.ai_patch=patch.object(game,'ai',side_effect=lambda *x,**k:calls.append(1));self.ai_patch.start()
+        with self.assertRaises(game.GameError):self.mc_chat(auth,p)
+        r=self.mc_chat(auth,p,0)['player']['active'];self.assertFalse(r['done']);self.assertEqual(r['attempts'],1)
+        r=self.mc_chat(auth,p,1)['player']['active'];self.assertTrue(r['done']);self.assertEqual(p['score'],.5);self.assertEqual(calls,[])
+    def test_mc_only_three_misses_reveal_answer_for_no_points(self):
+        auth,p,a=self.mc_player({'mc':True,'free':False})
+        for c in (0,2,3):r=self.mc_chat(auth,p,c)['player']['active']
+        self.assertTrue(r['done']);self.assertEqual(p['score'],0);self.assertIn('B) B two',r['messages'][-1]['text'])
+    def test_both_needs_choice_and_reasoning_and_wrong_choice_cannot_pass(self):
+        auth,p,a=self.mc_player({'mc':True,'free':True});self.assertEqual(a['mode'],'both')
+        seen=[];self.ai_patch.stop();self.ai_patch=patch.object(game,'ai',side_effect=lambda s,d,*x,**k:seen.append(d) or {'status':'correct','feedback':'Great!'});self.ai_patch.start()
+        with self.assertRaises(game.GameError):self.mc_chat(auth,p,text='because magnets pull things')
+        with self.assertRaises(game.GameError):self.mc_chat(auth,p,1,'yes')
+        r=self.mc_chat(auth,p,0,'I think magnets pull on iron so this one')['player']['active']
+        self.assertFalse(r['done']);self.assertNotIn('Great',r['messages'][-1]['text']);self.assertEqual(seen[-1]['student_choice'],0);self.assertIn('My choice: A) A one',seen[-1]['student'])
+        r=self.mc_chat(auth,p,1,'Domains line up so the field points one way')['player']['active'];self.assertTrue(r['done'])
+    def test_free_response_pack_ignores_choices(self):
+        auth,p,a=self.mc_player({'mc':False,'free':True});self.assertEqual(a['mode'],'free');self.assertEqual(a['choices'],[])
     def test_public_state_hides_keys_and_answers(self):
         r=game.dispatch('/api/state',self.auth); text=json.dumps(r['room']);self.assertNotIn(self.auth['token'],text);self.assertNotIn(self.created['host'],text);self.assertNotIn('terms',text);self.assertNotIn('questions',text)
     def ans(self):
