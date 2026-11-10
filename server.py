@@ -83,7 +83,7 @@ def load():
 
 def ai(system,data,max_tokens=1800,wait=None):
     wait=wait or (95 if max_tokens>=8000 else 55)
-    if not KEY: raise GameError('Claude Sonnet is not configured. No scripted fallback is available.')
+    if not KEY: raise GameError('The AI tutor is not configured. No scripted fallback is available.')
     payload={'model':MODEL,'max_tokens':max_tokens,'system':system,'messages':[{'role':'user','content':json.dumps(data)}]}
     # Preserve short, responsive tutor replies: Sonnet 5.5 otherwise enables thinking by default.
     if MODEL == 'claude-sonnet-5-5':
@@ -377,7 +377,7 @@ def dispatch(path,d):
         if d.get('tasksPerCrew'):
             try: pack['topics']=pack['topics'][:max(1,min(7,int(d['tasksPerCrew'])))]
             except (TypeError,ValueError): pass
-        if not KEY: raise GameError('Claude Sonnet is unavailable. Your teacher needs to configure the API key before play can start.')
+        if not KEY: raise GameError('The AI tutor is unavailable. Your teacher needs to configure the API key before play can start.')
         with LOCK:
             if len(ROOMS)>300: raise GameError('Server room limit reached.')
             code=''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6))
@@ -585,6 +585,7 @@ def dispatch(path,d):
                     a['repair']=True; result['feedback']+='\nWorked explanation: '+q['answer']+' Now explain this same idea in your own words.'
             elif result['status']=='correct':
                 points=0 if a['repair'] else [1,.5,.25][min(a['attempts'],2)]
+                a['points']=points;a['celebrate']=points>0
                 qid=f"{a['topic']}:{a['index']}"
                 if qid not in p['completed'] and (not a.get('practice') or r.get('game')):
                     p['completed'].append(qid); p['score']+=points; p['cells']+=0 if mcmiss else 1
