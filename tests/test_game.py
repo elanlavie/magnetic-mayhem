@@ -310,7 +310,7 @@ class VariantEncounterTests(unittest.TestCase):
                     p=game.ROOMS[c['code']]['players'][j['player']['id']];p['x'],p['y']=game.POSITIONS[0]
                     a=game.dispatch('/api/start',{'code':c['code'],'token':j['token'],'topic':0})['player']['active']
                     seen.add(a['prompt'])
-                    if a['prompt'].startswith('Var'): self.assertTrue(a['image'].startswith('data:image/svg+xml'))
+                    if a['prompt'].startswith('Var'): self.assertEqual(a['image'], '')
                 self.assertEqual(seen,{'Base 6 V?','Var 9 V?'})
             finally: game.KEY,game.TEACHER_KEY=old
 
