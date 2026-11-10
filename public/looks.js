@@ -1,4 +1,4 @@
-// Yapocalypse characters: a round critter with a shape, face, hat and one of 16 colors.
+// Imposter characters: a round critter with a shape, face, hat and one of 16 colors.
 const LOOK_COLORS={Red:'#e5484d',Orange:'#f5882b',Yellow:'#f7d23e',Lime:'#9bd93c',Green:'#2fa764',Teal:'#20b2aa',Cyan:'#3cc8f0',Blue:'#3d6fe0',Indigo:'#5b4bdb',Purple:'#9b59d6',Pink:'#f472b6',Magenta:'#d6338a',Brown:'#8a5a3c',Tan:'#d9b88f',White:'#f2f2f2',Charcoal:'#3a3f4b'};
 const LOOK_SHAPES=['blob','bunny','cat','bot'],LOOK_FACES=['happy','sleepy','wink','wow'],LOOK_HATS=['none','antenna','sprout','cap','phones','crown'];
 const LOOK_LABELS={blob:'Blob',bunny:'Bunny',cat:'Cat',bot:'Bot',happy:'Happy',sleepy:'Sleepy',wink:'Wink',wow:'Wow',none:'No hat',antenna:'Antenna',sprout:'Sprout',cap:'Cap',phones:'Headphones',crown:'Crown'};
