@@ -179,3 +179,4 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 .dashbtn{width:86px;height:86px;border-radius:50%;font-size:30px;line-height:1;align-content:center;background:#8a5a4fcc}.dashbtn small{font:700 10px 'Fredoka',sans-serif;letter-spacing:1px}
 @media(pointer:coarse) and (max-height:520px){.dpad{grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,50px)}.dpad button{width:50px;height:50px}.dashbtn{width:70px;height:70px}}
 @media(pointer:coarse){.viewport{height:calc(100dvh - 14px);min-height:0}.dpad{grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px)}.dpad button{width:54px;height:54px;opacity:.82}.dashbtn{width:76px;height:76px;opacity:.88}.touch-pad{bottom:12px}}
+@media(max-width:600px){.look-picker{gap:8px}.look-preview{width:100%;height:120px;object-fit:contain}.look-controls{min-width:0;width:100%}}
