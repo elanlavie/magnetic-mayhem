@@ -57,7 +57,7 @@ def start(room):
     now=time.time();g.update(tagFeed=[],impostorsEjected=0,briefingEndsAt=now+g['briefingSeconds'],startedAt=now,penalty=0,tagCount=0,meetingCount=0,summary=None,phase='briefing',round=g['round']+1,winner=None,reason='',meeting=None,bodies=[],lastMeeting=None,nextMeetingAt=0,roundEndsAt=0)
     for p in room['players'].values():
         park(p)
-        p.update(role='impostor' if p['id'] in impostors else 'crew',alive=True,pendingTag=None,
+        p.update(role='impostor' if p['id'] in impostors else 'crew',alive=True,pendingTag=None,pendingNotice=None,
                  roundTasks=[f'{i}:{secrets.randbelow(len(t["questions"]))}' for i,t in enumerate(room['pack']['topics'])],
                  roundDone=[],killReadyAt=now+KILL_COOLDOWN,socialRound=g['round'],conversations={},x=800,y=460,botPath=[],botTarget=None,botWaitingUntil=0,botSuspect=None,
                  briefReady=False,tagCharge=0,shield=0,notices=[],botChargeAt=0,stats={'tags':0,'answers':0,'distance':0.0,'goodVotes':0,'votes':0,'items':0},safeUntil=0,blockedTopic=None,blockedUntil=0)
@@ -115,6 +115,7 @@ def shift_clocks(room,seconds):
         if p.get('killReadyAt'):p['killReadyAt']+=seconds
         if p.get('botWaitingUntil'):p['botWaitingUntil']+=seconds
         if p.get('pendingTag'):p['pendingTag']['at']+=seconds
+        if p.get('pendingNotice'):p['pendingNotice']['at']+=seconds
 
 def resolve_meeting(room):
     g=room['game'];m=g['meeting'];living=[p for p in room['players'].values() if p.get('alive',True)]
@@ -150,10 +151,18 @@ def auto_tag_delay(living):
     path, so a shorter delay already blurs who was nearby. About 90/(players-2), kept between 8 and 30 seconds."""
     return max(8,min(30,round(90/max(1,living-2))))
 
+def tag_delay_seconds(room):
+    g=room['game'];d=g.get('tagDelay')
+    if d is None:d=auto_tag_delay(sum(1 for x in room['players'].values() if x.get('alive',True)))
+    return random.uniform(.7*d,1.3*d) if d else 0
+
 def land_tags(room,force=False):
     """A delayed tag takes effect: the victim is powered down and everyone sees an alert."""
     g=room['game'];now=time.time();landed=False
     for t in list(room['players'].values()):
+        pn=t.get('pendingNotice')
+        if pn and (force or now>=pn['at']):
+            t.pop('pendingNotice',None);notify(t,pn['text'],pn['kind'],pn['sub'])
         pt=t.get('pendingTag')
         if not pt or not t.get('alive',True):
             if pt:t.pop('pendingTag',None)
@@ -280,14 +289,15 @@ def action(room,player,data,walls):
         player['tagCharge']=max(0,charge-need)
         if target.get('shield',0)>0:
             target['shield']-=1;player['killReadyAt']=now+KILL_COOLDOWN/2
-            notify(target,'🛡️ Your shield blocked a tag!','shield','Someone nearby is an impostor. Remember who was close.')
+            wait=tag_delay_seconds(room)
+            if wait:target['pendingNotice']={'at':now+wait,'text':'🛡️ Your shield blocked a tag!','kind':'shield','sub':'Someone nearby was an impostor. Remember who was close a few seconds ago.'}
+            else:notify(target,'🛡️ Your shield blocked a tag!','shield','Someone nearby is an impostor. Remember who was close.')
             notify(player,'🛡️ Blocked! That crewmate had a shield.','shield','Your tag charge was used up. Try again after a short cooldown.')
             return
         for witness in room['players'].values():
             if witness.get('bot') and witness.get('alive',True) and witness['id'] not in (player['id'],target['id']) and near(witness,player,230,walls):witness['botSuspect']=player['id']
-        d=g.get('tagDelay')
-        if d is None:d=auto_tag_delay(sum(1 for x in room['players'].values() if x.get('alive',True)))
-        target['pendingTag']={'at':now+(random.uniform(.7*d,1.3*d) if d else 0),'by':player['id']}
+        wait=tag_delay_seconds(room);d=wait
+        target['pendingTag']={'at':now+wait,'by':player['id']}
         notify(player,'⚡ Tag sent. It lands in a few seconds, so slip away and act natural.' if d else '⚡ Tag landed.')
         player['killReadyAt']=now+KILL_COOLDOWN
         if not d:land_tags(room)

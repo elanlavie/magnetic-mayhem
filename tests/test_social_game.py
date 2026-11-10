@@ -120,6 +120,14 @@ class SocialTests(unittest.TestCase):
         game.dispatch('/api/cell',{**self.auth[p['id']],'cell':cell})
         self.assertEqual(p['stats']['items'],1)
         summary=social.summarize(self.room);self.assertIn('items',[b['key'] for b in summary['boards']])
+    def test_shield_block_notice_is_delayed_for_victim_but_instant_for_impostor(self):
+        self.g['tagDelay']=10;c=self.crew[0];c['shield']=1;c['notices']=[];self.imp['notices']=[]
+        self.imp.update(x=800,y=460,tagCharge=2,killReadyAt=0);c.update(x=830,y=460)
+        self.act(self.imp,'tag',target=c['id'])
+        self.assertTrue(any('Blocked' in n['text'] for n in self.imp['notices']))
+        self.assertFalse(any(n.get('kind')=='shield' for n in c['notices']))  # not yet
+        c['pendingNotice']['at']=time.time()-1;social.advance(self.room)
+        self.assertTrue(any(n.get('kind')=='shield' for n in c['notices']))
     def test_tag_delay_zero_is_instant(self):
         self.g['tagDelay']=0;self.imp.update(x=800,y=460,tagCharge=2,killReadyAt=0);self.crew[0].update(x=830,y=460)
         self.act(self.imp,'tag',target=self.crew[0]['id']);self.assertFalse(self.crew[0]['alive'])
