@@ -167,3 +167,15 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 .encounter-head h2,.modal-card h2{font-family:'Fredoka',sans-serif;font-weight:600}
 
 #boost-fill.locked{background:#e05a5a!important;opacity:.85}
+/* phone controls: no text highlight, bigger d-pad, dash on the right */
+.viewport,.viewport *,.touch-pad,.touch-pad *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.touch-pad{left:0;right:0;bottom:14px;display:none;justify-content:space-between;align-items:flex-end;padding:0 14px;pointer-events:none}
+@media(pointer:coarse){.touch-pad{display:flex}.interact{bottom:auto;top:56px}}
+.touch-pad>*{pointer-events:auto}
+.dpad{display:grid;grid-template-columns:repeat(3,62px);grid-template-rows:repeat(3,62px);gap:4px;touch-action:none}
+.dpad button,.dashbtn{margin:0;width:62px;height:62px;border-radius:16px;font-size:22px;background:#744e46bb;border:2px solid #b98a7d99;color:#fff;touch-action:none;display:grid;place-items:center;padding:0}
+.dpad button:active,.dashbtn:active{background:#ffb591dd;color:#46352f;transform:scale(.94)}
+.dpad .u{grid-column:2;grid-row:1}.dpad .l{grid-column:1;grid-row:2}.dpad .r{grid-column:3;grid-row:2}.dpad .d{grid-column:2;grid-row:3}
+.dashbtn{width:86px;height:86px;border-radius:50%;font-size:30px;line-height:1;align-content:center;background:#8a5a4fcc}.dashbtn small{font:700 10px 'Fredoka',sans-serif;letter-spacing:1px}
+@media(pointer:coarse) and (max-height:520px){.dpad{grid-template-columns:repeat(3,50px);grid-template-rows:repeat(3,50px)}.dpad button{width:50px;height:50px}.dashbtn{width:70px;height:70px}}
+@media(pointer:coarse){.viewport{height:calc(100dvh - 14px);min-height:0}.dpad{grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px)}.dpad button{width:54px;height:54px;opacity:.82}.dashbtn{width:76px;height:76px;opacity:.88}.touch-pad{bottom:12px}}
