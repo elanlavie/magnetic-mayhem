@@ -80,3 +80,8 @@
 /* phones: the chat is never hidden; the simulation opens full screen from a button */
 #simback{display:none}
 @media(max-width:900px){#encounter.with-sim .encounter-card{display:block!important}#simpanel{position:fixed!important;inset:0!important;top:0!important;bottom:0!important;width:100%!important;height:100dvh!important;border-radius:0!important;z-index:40!important}#simpanel.hidden{display:none!important}#simpanel:not(.hidden){display:flex!important}#simback{display:inline-flex}}
+
+.look-title{margin:14px 0 6px;font-weight:700;color:#ffd0ba}.look-picker{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}.look-preview{width:150px;height:170px;border-radius:16px;background:radial-gradient(circle at 50% 70%,#46312b,#1f120e);border:1px solid var(--line)}
+.look-controls{flex:1;min-width:210px;display:flex;flex-direction:column;gap:8px}.look-swatches{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}.swatch{aspect-ratio:1;border-radius:50%;border:2px solid #0006;cursor:pointer;padding:0}.swatch.on{outline:3px solid #fff;outline-offset:1px}.swatch:disabled{opacity:.25;cursor:not-allowed;background-image:linear-gradient(45deg,transparent 45%,#000 45%,#000 55%,transparent 55%)!important}
+.look-name{font-weight:700;text-transform:capitalize;color:#ffd0ba}.look-group{display:flex;flex-wrap:wrap;gap:5px}.look-opt{padding:5px 10px;border:1px solid var(--line);border-radius:99px;background:#2c1b16;color:var(--text);font-size:12px;cursor:pointer}.look-opt.on{background:#ffb591;color:#2c1b16;border-color:#ffb591;font-weight:700}
+.crew-row{display:flex;align-items:center;gap:6px}.dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid #0008;flex:none}

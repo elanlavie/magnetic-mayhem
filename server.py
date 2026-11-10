@@ -28,6 +28,22 @@ def explorer_name(room):
     names=[f'{emoji} {adj} {animal}' for adj in NAME_ADJECTIVES for emoji,animal in NAME_ANIMALS]
     return secrets.choice([name for name in names if name not in used])
 
+LOOK_COLORS=['Red','Orange','Yellow','Lime','Green','Teal','Cyan','Blue','Indigo','Purple','Pink','Magenta','Brown','Tan','White','Charcoal']
+LOOK_SHAPES=['blob','bunny','cat','bot'];LOOK_FACES=['happy','sleepy','wink','wow'];LOOK_HATS=['none','antenna','sprout','cap','phones','crown']
+def clean_look(v,room=None,me=None):
+    """A player's character: shape, face, hat and a color that is unique within the room (the next free color if theirs is taken)."""
+    v=v if isinstance(v,dict) else {}
+    pick=lambda key,opts,default:v.get(key) if v.get(key) in opts else default
+    look={'color':pick('color',LOOK_COLORS,None),'shape':pick('shape',LOOK_SHAPES,'blob'),'face':pick('face',LOOK_FACES,'happy'),'hat':pick('hat',LOOK_HATS,'none')}
+    if room is not None:
+        taken={(p.get('look') or {}).get('color') for p in room['players'].values() if p is not me}
+        if look['color'] is None or look['color'] in taken:
+            start=LOOK_COLORS.index(look['color']) if look['color'] in LOOK_COLORS else secrets.randbelow(len(LOOK_COLORS))
+            order=LOOK_COLORS[start:]+LOOK_COLORS[:start]
+            look['color']=next((c for c in order if c not in taken),look['color'] or LOOK_COLORS[start])
+    elif look['color'] is None:look['color']=LOOK_COLORS[0]
+    return look
+
 GRADES=['6th grade','7th grade','8th grade','9th grade','10th grade','11th grade','12th grade','Intro college']
 def clean_grade(v):
     v=str(v or '').strip()
@@ -171,7 +187,7 @@ def room_public(r):
     players=[]
     for p in r['players'].values():
         item={k:p[k] for k in ('id','name','team','x','y','completed','score','cells','repairs','last')}
-        item.update(alive=p.get('alive',True),bot=bool(p.get('bot')))
+        item.update(alive=p.get('alive',True),bot=bool(p.get('bot')),look=p.get('look'))
         if r.get('game'):
             nowt=time.time();item.update(chatting=bool(p.get('active')) or nowt<p.get('botWaitingUntil',0),safe=nowt<p.get('safeUntil',0))
         if r.get('game') and not item['alive']:item['x']=item['y']=None
@@ -355,11 +371,11 @@ def dispatch(path,d):
             team='crew' if r['mode']!='race' else ('violet' if sum(x['team']=='violet' for x in r['players'].values())<=sum(x['team']=='mint' for x in r['players'].values()) else 'mint')
             p={'id':pid,'token':token,'name':name,'team':team,'x':800,'y':460,'completed':[],'score':0,'cells':2,'repairs':[],'last':time.time(),'active':None,'history':[],'cache':{},'studied':[],'conversations':{},'relay':None,'relayRecords':{}}
             if identity:p['email']=identity['email'];p['realName']=identity['name']
-            r['players'][pid]=p
+            p['look']=clean_look(d.get('look'),r);r['players'][pid]=p
             if r.get('botPractice'):
                 r['autoNames']=True
                 for _ in range(5):
-                    bot=copy.deepcopy(p);bot.update(id=secrets.token_hex(6),token=secrets.token_urlsafe(24),name=explorer_name(r),bot=True);bot.pop('email',None);bot.pop('realName',None)
+                    bot=copy.deepcopy(p);bot.update(id=secrets.token_hex(6),token=secrets.token_urlsafe(24),name=explorer_name(r),bot=True,look=clean_look({'shape':secrets.choice(LOOK_SHAPES),'face':secrets.choice(LOOK_FACES),'hat':secrets.choice(LOOK_HATS)},r));bot.pop('email',None);bot.pop('realName',None)
                     r['players'][bot['id']]=bot
                 social.start(r)
             save(); return {**snapshot(r,p),'token':token}
@@ -391,6 +407,13 @@ def dispatch(path,d):
         r,p=get(d); p['last']=time.time()
         if social.advance(r):save()
         if path=='/api/state': return snapshot(r,p)
+        if path=='/api/look':
+            want=(d.get('look') or {}).get('color') if isinstance(d.get('look'),dict) else None
+            new=clean_look(d.get('look'),r,p)
+            if want in LOOK_COLORS and new['color']!=want:
+                owner=next((x['name'] for x in r['players'].values() if x is not p and (x.get('look') or {}).get('color')==want),'someone')
+                raise GameError(f'{want} is taken by {owner}. Pick another color.')
+            p['look']=new;save();return snapshot(r,p)
         if path=='/api/leave':
             if p['active']:
                 p.setdefault('conversations',{})[str(p['active']['topic'])]=p['active']
