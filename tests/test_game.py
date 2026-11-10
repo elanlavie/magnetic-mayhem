@@ -245,13 +245,16 @@ class UpgradeTests(unittest.TestCase):
         self.assertEqual(game.ROOMS[solo['code']]['gameType'],'station')
 
 class ThinkTimeTests(unittest.TestCase):
-    def test_thinking_time_scales_with_difficulty_and_is_bounded(self):
-        short = game.think_seconds({'prompt': 'Why do magnets attract iron?'})
-        long = game.think_seconds({'prompt': 'word ' * 60 + 'Calculate the current in a 12 V circuit with 4 ohm resistance.'})
-        self.assertTrue(30 <= short < long <= 150)
-        self.assertEqual(game.think_seconds({'prompt': 'x', 'seconds': 500}), 150)
-        self.assertEqual(game.think_seconds({'prompt': 'x', 'seconds': 5}), 30)
-        self.assertEqual(game.think_seconds({'prompt': 'x', 'seconds': 'bad'}), game.think_seconds({'prompt': 'x'}))
+    def test_thirty_seconds_for_multiple_choice_and_a_minute_otherwise(self):
+        q={'prompt':'Why do magnets attract iron?'}
+        self.assertEqual(game.think_seconds(q,'mc'),30);self.assertEqual(game.think_seconds(q,'both'),60);self.assertEqual(game.think_seconds(q),60)
+        self.assertEqual(game.think_seconds({'prompt':'word '*80},'free'),60)
+    def test_a_question_can_override_its_time_within_bounds(self):
+        self.assertEqual(game.think_seconds({'prompt':'x','seconds':500}),150);self.assertEqual(game.think_seconds({'prompt':'x','seconds':5}),30)
+        self.assertEqual(game.think_seconds({'prompt':'x','seconds':'bad'},'mc'),30)
+    def test_generator_prompt_demands_short_single_part_questions(self):
+        for mc in (False,True):
+            p=game.topic_prompt('9th grade',mc);self.assertIn('ONE or TWO short sentences',p);self.assertIn('no multi-part',p)
 
 if __name__=='__main__':unittest.main()
 
