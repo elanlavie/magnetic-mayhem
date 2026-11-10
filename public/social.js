@@ -24,7 +24,7 @@ function roleText(g,p){
  return `<ul class="brief-short"><li>🏆 <b>Your job:</b> finish your chats, then keep answering for 🛡️ shields.</li><li>🔍 <b>Watch</b> who is near when someone is powered down.</li><li>🗳️ <b>In meetings,</b> share what you saw, then vote.</li></ul>`}
 function renderBriefing(){const g=socialGame(),p=state?.player;let el=$('#briefing');
  let wait=$('#brief-wait');const skipped=Boolean(p?.briefReady||socialBriefSkipped===g?.round);
- if(g?.phase==='briefing'&&p?.role&&skipped){if(!wait){wait=document.createElement('div');wait.id='brief-wait';wait.className='tag-prompt wait';wait.setAttribute('role','status');document.body.appendChild(wait)}wait.textContent=`✅ You're ready · waiting for classmates (${g.briefReady}/${g.briefHumans}) · starts in ${state.room.paused?'…':socialSeconds(g.briefingEndsAt)+'s'}`}else if(wait)wait.remove();
+ if(g?.phase==='briefing'&&p?.role&&skipped){if(!wait){wait=document.createElement('div');wait.id='brief-wait';wait.className='tag-prompt wait';wait.setAttribute('role','status');document.body.appendChild(wait)}wait.textContent=g.briefHumans<=1?'✅ Ready! Starting your game…':`✅ You're ready · waiting for classmates (${g.briefReady}/${g.briefHumans}) · starts in ${state.room.paused?'…':socialSeconds(g.briefingEndsAt)+'s'}`}else if(wait)wait.remove();
  if(!g||g.phase!=='briefing'||!p?.role||skipped){if(el){el.remove();el=null}return}
  if(!el){closeModal();el=document.createElement('div');el.id='briefing';el.className='briefing';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','Your role briefing');document.body.appendChild(el)}
  const shown=socialBriefRound===g.round,key=g.round+':'+(shown?1:0);
