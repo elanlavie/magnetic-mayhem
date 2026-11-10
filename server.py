@@ -540,6 +540,7 @@ def dispatch(path,d):
             if math.dist([p['x'],p['y']],cells[cell])>50: return {'ok':False}
             active.remove(cell); r['cellPool']['respawn'].append(time.time()+CELL_RESPAWN)
             key='hints' if pickup_kind(cell)=='hint' else 'times'; p[key]=p.get(key,0)+1
+            if p.get('stats') is not None: p['stats']['items']=p['stats'].get('items',0)+1
             save(); return {'ok':True,'cells':p['cells'],'hints':p.get('hints',0),'times':p.get('times',0),'kind':pickup_kind(cell)}
         if path=='/api/moretime':
             a=p['active']

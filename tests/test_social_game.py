@@ -115,6 +115,11 @@ class SocialTests(unittest.TestCase):
     def test_auto_tag_delay_shrinks_with_more_players(self):
         self.assertEqual([social.auto_tag_delay(n) for n in (3,4,6,8,10,14,30)],[30,30,22,15,11,8,8])
         self.assertTrue(all(social.auto_tag_delay(n)>=social.auto_tag_delay(n+1) for n in range(3,40)))
+    def test_collecting_items_counts_for_leaderboard(self):
+        p=self.crew[0];cell=game.cell_pool(self.room)[0];p['x'],p['y']=game.cell_positions()[cell]
+        game.dispatch('/api/cell',{**self.auth[p['id']],'cell':cell})
+        self.assertEqual(p['stats']['items'],1)
+        summary=social.summarize(self.room);self.assertIn('items',[b['key'] for b in summary['boards']])
     def test_tag_delay_zero_is_instant(self):
         self.g['tagDelay']=0;self.imp.update(x=800,y=460,tagCharge=2,killReadyAt=0);self.crew[0].update(x=830,y=460)
         self.act(self.imp,'tag',target=self.crew[0]['id']);self.assertFalse(self.crew[0]['alive'])
