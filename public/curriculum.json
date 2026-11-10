@@ -1,11 +1,124 @@
 {
- "title":"Magnetism: Rescue the Station", "topics":[
- {"name":"Magnetic origins","icon":"🧲","color":"#a995ff","questions":[{"prompt":"A coil acts like a magnet when its circuit is switched on. What creates its magnetic field, and why does switching the current off change it?","answer":"Moving electric charges in the current produce the magnetic field. Switching off the current removes that source of the coil's field.","hint":"What is flowing through a powered wire? Connect that flow to the magnetic field.","terms":[["current","charge","electron"],["field","magnet"],["off","stop","flow","moving"]]},{"prompt":"A friend says a refrigerator magnet needs a hidden battery. Explain why a permanent magnet can have a magnetic field without an external electric circuit.","answer":"Electrons have magnetic moments, including an intrinsic spin contribution. Their organized magnetic moments can give a material a lasting field without an external battery.","hint":"Think about electrons inside the material. They have magnetic properties even without a battery-powered circuit.","terms":[["electron","moment"],["align","organ","spin","magnetic"],["battery","circuit","external"]]}]},
- {"name":"Permanent magnets","icon":"🧭","color":"#5fe2c1","questions":[{"prompt":"You cut a bar magnet in half. Will one piece have only a north pole? Predict what each piece will be like and explain.","answer":"Each piece has a north and south pole. Cutting the material does not isolate a single pole; its magnetic organization still produces both poles.","hint":"Do smaller magnets still have two ends with different magnetic behavior?","terms":[["north"],["south"],["both","each","two"]]},{"prompt":"Two iron samples look identical, but only one is magnetized. How can magnetic domain alignment explain the difference?","answer":"In the magnetized sample many domains align, so their effects add. In an unmagnetized sample domain orientations largely cancel overall.","hint":"Compare domains pointing together with domains pointing in different directions.","terms":[["domain"],["align","same direction","together"],["cancel","different","random"]]}]},
- {"name":"Electromagnets","icon":"🌀","color":"#63ceff","questions":[{"prompt":"A magnetic crane is too weak. Keeping current and coil length the same, would adding more wire turns strengthen it? Explain the physical reason.","answer":"Yes. With the same current and coil length, more turns contribute magnetic fields that add together and strengthen the coil's field.","hint":"Each turn contributes a magnetic field. What happens when those contributions reinforce one another?","terms":[["turn","loop","coil"],["field","magnet"],["add","strong","reinforce"]]},{"prompt":"You reverse the battery connections to an electromagnet. What happens to its north and south poles, and why?","answer":"The poles swap because the current reverses, reversing the magnetic field direction.","hint":"Follow this chain: battery connection → current direction → field direction.","terms":[["current"],["reverse","swap","switch","opposite"],["pole","field"]]}]},
- {"name":"Induction","icon":"⚡","color":"#ffd275","questions":[{"prompt":"A magnet sits motionless beside a fixed coil connected in a closed circuit. Your partner expects a continuous current. Explain what must change to induce current.","answer":"The magnetic flux through the coil must change. Moving the magnet relative to the coil is one way. A steady magnet and fixed loop alone do not give continuous induced current.","hint":"Compare holding the magnet still with moving it toward the loop. What changes through the loop?","terms":[["chang","mov"],["field","flux"],["coil","loop"]]},{"prompt":"A magnet moves toward a coil, but the wire circuit has a gap. Can there be an induced voltage? Can a sustained current flow? Explain the difference.","answer":"Changing flux can induce voltage, but the gap prevents a sustained current around the circuit. Current needs a closed conducting path.","hint":"Separate voltage from current. Which one requires a closed conducting path?","terms":[["voltage"],["current"],["gap","open","closed","complete"]]}]},
- {"name":"Motors","icon":"⚙️","color":"#fb9fba","questions":[{"prompt":"The ship's fan is an electric motor. Explain its energy conversion and how magnets and current can make its rotor turn.","answer":"A motor converts electrical energy into mechanical motion. A magnetic field exerts forces on the current-carrying coil, arranged to produce a turning effect.","hint":"Name the energy input and output, then connect current in a field to a force.","terms":[["electric"],["motion","mechanical","turn"],["force","field","magnet"]]},{"prompt":"In the same motor geometry, you reverse only the current while keeping the permanent magnetic field the same. Predict the change in turning effect and explain.","answer":"Reversing the current reverses the magnetic force on the coil and thus its turning effect in the same geometry.","hint":"The force direction depends on current direction as well as field direction.","terms":[["current"],["reverse","opposite"],["force","turn","direction"]]}]},
- {"name":"Generators","icon":"🔋","color":"#91e8a4","questions":[{"prompt":"A hand-cranked generator lights a lamp. Where does the electrical energy come from, and what makes a voltage appear in its coil?","answer":"Mechanical work from your hand supplies the energy. Rotation changes magnetic flux through a coil, inducing voltage; a closed circuit lets current light the lamp.","hint":"The generator does not create energy. What supplies it, and what changes as the coil rotates?","terms":[["hand","mechanical","motion","work"],["chang","rotat","turn"],["field","flux"]]},{"prompt":"A motor and a generator can contain similar magnetic parts. Explain how their intended energy conversions differ.","answer":"A motor takes electrical energy in and produces mechanical motion. A generator takes mechanical motion in and produces electrical energy.","hint":"Trace the energy input and output separately for each machine.","terms":[["motor"],["generator"],["electric"],["motion","mechanical"]]}]},
- {"name":"AC & DC","icon":"〰️","color":"#bca5ff","questions":[{"prompt":"Compare electron motion in a battery-powered DC circuit with electron motion in an AC circuit. What does alternating actually mean?","answer":"In DC the average electron drift is in one direction. In AC the drift reverses direction repeatedly; electrons move back and forth rather than continuously around one way.","hint":"Contrast one-direction drift with repeated reversal, not fast versus slow electrons.","terms":[["dc","battery"],["ac","alternat"],["one direction","same direction"],["back and forth","revers","opposite"]]},{"prompt":"A student says every generator must supply AC because wall outlets supply AC. Explain the useful classroom comparison and correct the overgeneralization.","answer":"Batteries supply DC; the electrical grid supplies AC. A generator's design determines its output, so generators can supply AC or DC depending on construction and rectification.","hint":"Separate the familiar grid example from a claim about every possible generator design.","terms":[["battery","batteries"],["dc"],["ac"],["design","depend","both","not all"]]}]}
+ "title": "Brain Boost: Rescue the Station",
+ "topics": [
+  {
+   "name": "Claim & Evidence",
+   "icon": "📝",
+   "color": "#a995ff",
+   "questions": [
+    {
+     "prompt": "A friend says school should start later. Name one piece of evidence that would make that claim stronger, and explain why.",
+     "answer": "Strong evidence is specific and checkable, like a study showing teens learn better with more sleep. It supports the claim instead of just repeating it.",
+     "hint": "Think about proof you could point to, not just an opinion."
+    },
+    {
+     "prompt": "Why is 'everyone knows it's true' a weak reason to believe a claim?",
+     "answer": "Popularity is not proof. A claim needs evidence that can be checked, since lots of people can believe something false.",
+     "hint": "Ask yourself: how could someone check it?"
+    }
+   ]
+  },
+  {
+   "name": "Food Chains",
+   "icon": "🌱",
+   "color": "#8fe0c2",
+   "questions": [
+    {
+     "prompt": "If all the frogs in a pond disappeared, what would probably happen to the insects, and why?",
+     "answer": "The insect population would grow because their predator is gone, and then they might eat too many plants.",
+     "hint": "Who eats the insects? Follow the arrow."
+    },
+    {
+     "prompt": "Why do plants sit at the bottom of almost every food chain?",
+     "answer": "Plants make their own food from sunlight, so they supply the energy every other organism depends on.",
+     "hint": "Where does the first bit of energy come from?"
+    }
+   ]
+  },
+  {
+   "name": "Fractions in Real Life",
+   "icon": "🍕",
+   "color": "#ffb74d",
+   "questions": [
+    {
+     "prompt": "You ate 3/8 of a pizza and your friend ate 1/4. Who ate more, and how do you know?",
+     "answer": "You ate more. 1/4 equals 2/8, and 3/8 is bigger than 2/8.",
+     "hint": "Try giving both fractions the same bottom number."
+    },
+    {
+     "prompt": "A recipe needs 3/4 cup of milk and you want to make half the recipe. How much milk do you use, and why?",
+     "answer": "3/8 cup, because half of 3/4 is 3/4 times 1/2, which is 3/8.",
+     "hint": "Half of something means multiply by 1/2."
+    }
+   ]
+  },
+  {
+   "name": "Ancient Rome",
+   "icon": "🏛️",
+   "color": "#ff8a80",
+   "questions": [
+    {
+     "prompt": "Why did Roman roads help the empire stay powerful?",
+     "answer": "Roads let armies, messages and trade move quickly, so Rome could control and connect far-away lands.",
+     "hint": "Think about speed and who needed to travel."
+    },
+    {
+     "prompt": "Why might a huge empire like Rome be hard to hold together?",
+     "answer": "It is hard to govern, defend and communicate across great distances, and different regions may not feel loyal to one ruler.",
+     "hint": "Imagine running something with no phones."
+    }
+   ]
+  },
+  {
+   "name": "Weather & Water",
+   "icon": "🌧️",
+   "color": "#64b5f6",
+   "questions": [
+    {
+     "prompt": "Why does it often rain more on one side of a mountain than the other?",
+     "answer": "Air rises up the mountain, cools, and drops its water as rain on that side, leaving the far side dry.",
+     "hint": "What happens to warm moist air as it climbs?"
+    },
+    {
+     "prompt": "Why does a puddle disappear on a sunny day even though it never boiled?",
+     "answer": "Water evaporates from the surface when its fastest molecules escape, and sunlight speeds that up.",
+     "hint": "Evaporation does not need boiling."
+    }
+   ]
+  },
+  {
+   "name": "Fair Tests",
+   "icon": "🔬",
+   "color": "#4dd0e1",
+   "questions": [
+    {
+     "prompt": "A student tests plant growth using different light AND different water. Why is that a problem?",
+     "answer": "Changing two things at once means you cannot tell which one caused the difference. Test only one variable at a time.",
+     "hint": "If the plants differ, which change gets the credit?"
+    },
+    {
+     "prompt": "Why do scientists repeat an experiment more than once?",
+     "answer": "Repeating shows whether the result is reliable or just luck or a mistake in one try.",
+     "hint": "One surprising result could be a fluke."
+    }
+   ]
+  },
+  {
+   "name": "Money Smarts",
+   "icon": "💰",
+   "color": "#ce93d8",
+   "questions": [
+    {
+     "prompt": "Why can a credit card with 20% interest cost you more than the price tag?",
+     "answer": "If you do not pay it all back right away, interest is added to what you owe, so the total grows over time.",
+     "hint": "Borrowed money comes with a fee."
+    },
+    {
+     "prompt": "Why is it smart to save a little money every week, even a small amount?",
+     "answer": "Small amounts add up over time, and savings help you handle surprises without borrowing.",
+     "hint": "Think about a year of little amounts."
+    }
+   ]
+  }
  ]
 }
