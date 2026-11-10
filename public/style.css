@@ -91,3 +91,5 @@
 #questions-head{margin:28px 0 6px}
 #chatform.mc-only textarea,#chatform.mc-only #dictate-answer{display:none}#chatform.mc-only{justify-content:flex-end}
 @media(max-width:700px){.answer-style{grid-template-columns:1fr}}
+
+.short-input{max-width:110px}
