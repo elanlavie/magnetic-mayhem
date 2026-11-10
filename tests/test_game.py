@@ -107,9 +107,16 @@ class GameTests(unittest.TestCase):
     def test_repair_requires_own_understanding(self):
         self.p['x'],self.p['y']=game.POSITIONS[0];self.p['cells']=3
         with self.assertRaises(game.GameError):game.dispatch('/api/repair',{**self.auth,'topic':0})
+    def test_tokens_pay_for_hints_and_time(self):
+        self.start();self.p['cells']=0;self.p['hints']=1;self.p['times']=0
+        self.chat(kind='hint');self.assertEqual(self.p['hints'],0);self.p['cells']=0
+        with self.assertRaises(game.GameError):game.dispatch('/api/moretime',{**self.auth,'challenge':self.p['active']['id']})
+        self.p['times']=1;game.dispatch('/api/moretime',{**self.auth,'challenge':self.p['active']['id']});self.assertEqual(self.p['times'],0)
+        self.p['cells']=1;game.dispatch('/api/moretime',{**self.auth,'challenge':self.p['active']['id']});self.assertEqual(self.p['cells'],0)  # spare cell works as a joker
     def test_cells_not_duplicated(self):
         game.cell_pool(game.ROOMS[self.auth['code']]);cell=game.ROOMS[self.auth['code']]['cellPool']['active'][0];self.p['x'],self.p['y']=game.cell_positions()[cell]
-        game.dispatch('/api/cell',{**self.auth,'cell':cell});game.dispatch('/api/cell',{**self.auth,'cell':cell});self.assertEqual(self.p['cells'],1)
+        game.dispatch('/api/cell',{**self.auth,'cell':cell});game.dispatch('/api/cell',{**self.auth,'cell':cell});self.assertEqual(self.p.get('hints',0)+self.p.get('times',0),1)  # one token, not two
+        self.assertEqual(self.p['hints' if cell%2==0 else 'times'],1)
         self.assertNotIn(cell,game.ROOMS[self.auth['code']]['cellPool']['active'])  # taken until it respawns
     def test_cells_scale_with_players_and_hints_cost_one(self):
         r=game.ROOMS[self.auth['code']];self.assertEqual(len(game.cell_pool(r)),3)

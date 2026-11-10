@@ -233,6 +233,14 @@ def room_public(r):
 
 CELL_RESPAWN=45
 CELLS_PER_PLAYER=0.75
+def pickup_kind(i): return 'hint' if i%2==0 else 'time'
+def spend(p,kind):
+    """Use a matching token first (💡 hint / ⏱️ time), else a spare ⚡ cell."""
+    key={'hint':'hints','time':'times'}[kind]
+    if p.get(key,0)>0: p[key]-=1; return True
+    if p['cells']>0: p['cells']-=1; return True
+    return False
+
 def cell_pool(r):
     """Shared ⚡ cells on the map: about three for every four players, so they stay scarce. A collected cell reappears elsewhere after a while."""
     now=time.time();pool=r.setdefault('cellPool',{'active':[],'respawn':[]});spots=len(cell_positions())
@@ -531,12 +539,13 @@ def dispatch(path,d):
             if cell not in range(len(cells)) or cell not in active: return {'ok':False}
             if math.dist([p['x'],p['y']],cells[cell])>50: return {'ok':False}
             active.remove(cell); r['cellPool']['respawn'].append(time.time()+CELL_RESPAWN)
-            p['cells']+=1; save(); return {'ok':True,'cells':p['cells']}
+            key='hints' if pickup_kind(cell)=='hint' else 'times'; p[key]=p.get(key,0)+1
+            save(); return {'ok':True,'cells':p['cells'],'hints':p.get('hints',0),'times':p.get('times',0),'kind':pickup_kind(cell)}
         if path=='/api/moretime':
             a=p['active']
             if not a or a['id']!=d.get('challenge') or a['done']: raise GameError('There is no open question to extend.')
-            if p['cells']<1: raise GameError('More thinking time costs 1 ⚡ cell. Collect a cell on the map first.')
-            p['cells']-=1; save(); return snapshot(r,p)
+            if not spend(p,'time'): raise GameError('More thinking time uses 1 ⏱️ token. Collect one on the map first.')
+            save(); return snapshot(r,p)
         if path!='/api/chat': raise GameError('Unknown action.')
         a=p['active']; rid=str(d.get('requestId',''))[:80]
         if rid in p['cache']: return snapshot(r,p)
@@ -559,7 +568,7 @@ def dispatch(path,d):
             else:
                 if not text.strip(): raise GameError('Add a few words about why you chose that answer.')
                 text=label+'\nMy reasoning: '+text
-        if kind=='hint' and p['cells']<1: raise GameError('A hint costs 1 ⚡ cell. Collect one on the map, or finish a chat to earn one.')
+        if kind=='hint' and p.get('hints',0)+p['cells']<1: raise GameError('A hint uses 1 💡 token. Collect one on the map first.')
         a['busy']=True; history=copy.deepcopy(a['messages']); repairing=a['repair'];chat_round=p.get('socialRound')
     mid=log_chat(r,p,a,'student',text if kind=='answer' else ('[asked for a hint]' if kind=='hint' else '[asked for the worked explanation]'))
     if kind=='answer' and not local:screen_chat(r,p,mid,accounts.screen(text))
@@ -572,7 +581,7 @@ def dispatch(path,d):
         log_chat(r,p,a,'tutor',result['feedback'][:3500])
         with LOCK:
             a['busy']=False; a['messages'].append({'role':'user','text':text if kind=='answer' else ('Hint, please.' if kind=='hint' else 'Show a worked explanation.')})
-            if kind=='hint': p['cells']=max(0,p['cells']-1)
+            if kind=='hint': spend(p,'hint')
             mcmiss=bool(local and result['status']=='incorrect')
             if mcmiss:
                 # multiple choice gets one shot: explain, award nothing, and never ask this question again
