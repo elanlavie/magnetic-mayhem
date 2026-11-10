@@ -216,3 +216,8 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 .crew-taskbar>span.chip-big{flex-direction:row;align-items:center;gap:8px;padding:8px 16px;border-radius:99px;font:600 clamp(16px,3.6vw,20px) 'Fredoka',sans-serif;color:#fff;background:#b3262688;border:2px solid #ff8a80}
 .crew-taskbar>span.chip-big b{font-size:1.35em;font-variant-numeric:tabular-nums}
 .crew-taskbar>span.chip-big.clock{background:#3b2a7a88;border-color:#b39dff}
+.status-row:has(.shield-badge){display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}
+.shield-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:99px;font:600 clamp(16px,3.6vw,20px) 'Fredoka',sans-serif;color:#fff;background:#ffffff14;border:2px solid #ffffff55}
+.shield-badge b{font-size:1.3em}
+.shield-badge.on{background:#1f5f8f99;border-color:#5ec8ff;box-shadow:0 0 18px #5ec8ff66}
+.shield-note{font-size:13px;color:#e7c7c2;flex:1;min-width:220px}
