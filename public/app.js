@@ -56,7 +56,7 @@ function enterGame(data){encounterEpoch++;activeId='';state=data;pos.x=data.play
 function topicCount(t){return 1}
 const aliveSeen={};let meSeen=null;
 function ghostWatch(){const r=state.room,p=state.player;if(!r.game)return;
- if(meSeen===true&&p.alive===false){const lm=r.game.lastMeeting?.message||'';const how=lm.includes(p.name)?lm:'An impostor tagged you.';modal(`<div class="eyebrow">👻 YOU ARE NOW A GHOST</div><h2>You were eliminated.</h2><p>${esc(how)}</p><p>Keep walking around and answering questions: every answer you finish still counts toward the crew total, so the crew needs you to win. You can't tag, vote, or call meetings.</p><button id="ghostok" class="primary wide">Got it, keep going</button>`);$('#ghostok').onclick=closeModal}
+ if(meSeen===true&&p.alive===false){const lm=r.game.lastMeeting?.message||'',voted=lm.includes(p.name);modal(`<div class="eyebrow">👻 ${voted?'YOU WERE VOTED OUT':'YOU WERE POWERED DOWN'}</div><h2>You’re a ghost, but you’re still in the game!</h2><ul class="brief-short"><li>✅ <b>Keep answering questions.</b> Every answer you finish still counts toward your team.</li><li>🚫 <b>You can’t vote</b> in meetings anymore.</li><li>🤫 <b>Stay quiet</b> about who was near you. Don’t spoil it for everyone else!</li></ul><button id="ghostok" class="primary wide">Got it, keep going</button>`);$('#ghostok').onclick=closeModal}
  meSeen=p.alive!==false;
  for(const x of r.players){if(x.id!==p.id&&aliveSeen[x.id]===true&&x.alive===false)logEvent(`👻 ${x.name} was eliminated.`);aliveSeen[x.id]=x.alive!==false}
  const g=r.game,mid=g.meeting?.id||null;if(mid&&mid!==logSeen.meeting)logEvent('🚨 A crew meeting was called.');logSeen.meeting=mid||logSeen.meeting;

@@ -192,3 +192,6 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 .station-entry small{font-size:10px!important;color:#fff!important;opacity:.85}
 .brief-short{list-style:none;padding:0;margin:14px 0}
 .brief-short li{font-size:16px;line-height:1.5;padding:10px 12px;margin-bottom:8px;border-radius:12px;background:#ffffff12}
+.tag-alert{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:60;display:flex;gap:12px;align-items:center;max-width:92vw;padding:14px 22px;border-radius:16px;background:#2b1a3a;border:3px solid #e040fb;color:#fff;box-shadow:0 10px 40px #000a,0 0 30px #e040fb88;animation:tagin .35s ease-out}
+.tag-alert span{font-size:34px}.tag-alert b{display:block;font:700 19px 'Fredoka',sans-serif}.tag-alert small{opacity:.8}
+@keyframes tagin{from{transform:translate(-50%,-30px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
