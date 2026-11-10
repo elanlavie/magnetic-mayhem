@@ -60,10 +60,10 @@ def start(room):
         p.update(role='impostor' if p['id'] in impostors else 'crew',alive=True,pendingTag=None,
                  roundTasks=[f'{i}:{secrets.randbelow(len(t["questions"]))}' for i,t in enumerate(room['pack']['topics'])],
                  roundDone=[],killReadyAt=now+KILL_COOLDOWN,socialRound=g['round'],conversations={},x=800,y=460,botPath=[],botTarget=None,botWaitingUntil=0,botSuspect=None,
-                 briefReady=False,tagCharge=0,shield=0,notices=[],botChargeAt=0,stats={'tags':0,'answers':0,'distance':0.0,'goodVotes':0,'votes':0},safeUntil=0,blockedTopic=None,blockedUntil=0)
+                 briefReady=False,tagCharge=0,shield=0,notices=[],botChargeAt=0,stats={'tags':0,'answers':0,'distance':0.0,'goodVotes':0,'votes':0,'items':0},safeUntil=0,blockedTopic=None,blockedUntil=0)
     return g
 
-BOARDS=[('tags','🏷️ Most tags','tags'),('answers','🧠 Most questions answered','answers'),('distance','👟 Furthest traveled','steps'),('goodVotes','🕵️ Best detective (accurate votes)','correct votes')]
+BOARDS=[('tags','🏷️ Most tags','tags'),('answers','🧠 Most questions answered','answers'),('distance','👟 Furthest traveled','steps'),('goodVotes','🕵️ Best detective (accurate votes)','correct votes'),('items','🎒 Most items collected','items')]
 
 def summarize(room):
     g=room['game'];humans=[p for p in room['players'].values() if not p.get('bot') and p.get('stats')]

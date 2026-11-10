@@ -208,3 +208,8 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 .crew-big{font:700 clamp(20px,4.5vw,28px)/1.15 'Fredoka',sans-serif;color:#fff}
 .crew-sub{font-size:13px;color:#e7c7c2}
 .crew-taskbar>div{height:16px!important;min-width:140px}
+.boost-hud{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:3;display:flex;align-items:center;gap:10px;padding:7px 14px;border-radius:99px;background:#2b1a15d9;border:2px solid #ffffff55;color:#fff;font:700 13px 'Fredoka',sans-serif;letter-spacing:1px;pointer-events:none}
+.boost-hud>div{width:clamp(90px,22vw,170px);height:14px;border-radius:99px;background:#00000066;overflow:hidden}
+.boost-hud i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#5ec8ff,#8bffc4);border-radius:99px}
+.boost-hud i.locked{background:#ff5252}
+.boost-hud.empty{border-color:#ff5252}
