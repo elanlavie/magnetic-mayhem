@@ -213,3 +213,6 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 .boost-hud i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#5ec8ff,#8bffc4);border-radius:99px}
 .boost-hud i.locked{background:#ff5252}
 .boost-hud.empty{border-color:#ff5252}
+.crew-taskbar>span.chip-big{flex-direction:row;align-items:center;gap:8px;padding:8px 16px;border-radius:99px;font:600 clamp(16px,3.6vw,20px) 'Fredoka',sans-serif;color:#fff;background:#b3262688;border:2px solid #ff8a80}
+.crew-taskbar>span.chip-big b{font-size:1.35em;font-variant-numeric:tabular-nums}
+.crew-taskbar>span.chip-big.clock{background:#3b2a7a88;border-color:#b39dff}
