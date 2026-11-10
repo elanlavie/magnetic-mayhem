@@ -203,3 +203,8 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 .timeup-sub{font-size:clamp(17px,3.6vw,24px)!important;color:#ffd9d0!important;line-height:1.45;margin:0 0 28px}
 .timeup-box button{font-size:clamp(20px,4.5vw,28px)!important;padding:18px 34px!important;border-radius:16px!important}
 @keyframes tuwob{0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg)}75%{transform:rotate(12deg)}}
+.crew-taskbar{background:#ffffff0d;border:2px solid #7ae2c9;border-radius:16px;padding:14px 16px;gap:10px 18px}
+.crew-taskbar>span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.crew-big{font:700 clamp(20px,4.5vw,28px)/1.15 'Fredoka',sans-serif;color:#fff}
+.crew-sub{font-size:13px;color:#e7c7c2}
+.crew-taskbar>div{height:16px!important;min-width:140px}
