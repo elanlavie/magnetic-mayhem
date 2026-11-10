@@ -129,6 +129,17 @@ class UpgradeTests(unittest.TestCase):
         game.dispatch('/api/start',{**self.auth,'topic':0});self.p['cells']=1;self.chat(kind='hint')
         system,data=game.ai.call_args[0][0],game.ai.call_args[0][1]
         self.assertIn('11th grade',system);self.assertNotIn('{GRADE}',system);self.assertEqual(data['grade_level'],'11th grade')
+    def test_characters_have_unique_colors_and_validated_looks(self):
+        r=game.dispatch('/api/create',{'mode':'coop','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'});code=r['code'];room=game.ROOMS[code]
+        a=game.dispatch('/api/join',{'code':code,'name':'A','look':{'color':'Blue','shape':'cat','face':'wink','hat':'crown'}})
+        b=game.dispatch('/api/join',{'code':code,'name':'B','look':{'color':'Blue','shape':'<x>','face':'nope','hat':'none'}})
+        self.assertEqual(a['player']['look'],{'color':'Blue','shape':'cat','face':'wink','hat':'crown'})
+        self.assertNotEqual(b['player']['look']['color'],'Blue');self.assertEqual((b['player']['look']['shape'],b['player']['look']['face']),('blob','happy'))  # taken color bumps to a free one; junk is cleaned
+        with self.assertRaises(game.GameError):game.dispatch('/api/look',{'code':code,'token':b['token'],'look':{'color':'Blue'}})  # cannot steal a taken color
+        ok=game.dispatch('/api/look',{'code':code,'token':b['token'],'look':{'color':'Pink','shape':'bunny','face':'sleepy','hat':'cap'}});self.assertEqual(ok['player']['look']['color'],'Pink')
+        pub={p['name']:p['look']['color'] for p in ok['room']['players']};self.assertEqual(pub,{'A':'Blue','B':'Pink'})  # everyone sees everyone's look
+        for n in range(14):game.dispatch('/api/join',{'code':code,'name':f'P{n}','look':{'color':'Blue'}})
+        self.assertEqual(len({p['look']['color'] for p in room['players'].values()}),16)  # 16 players, 16 distinct colors
     def test_solo_cannot_turn_off_claude(self):
         r=game.dispatch('/api/create',{'mode':'solo','live':False})
         self.assertTrue(game.ROOMS[r['code']]['ai'])
