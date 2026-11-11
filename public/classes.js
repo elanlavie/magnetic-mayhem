@@ -57,7 +57,7 @@ const Classes=(()=>{
   const alertId=new URLSearchParams(location.search).get('alert');
   if(alertId&&user.role==='teacher'){history.replaceState(null,'',location.pathname);openAlert(alertId)}
   populateClassPick();
-  if(user.role==='teacher'){packsMount();libMount();materialMount()}
+  if(user.role==='teacher'){packsMount();libMount();materialMount();contextMount()}
  }
 
  // ---------- teacher / student class screen
@@ -141,6 +141,7 @@ const Classes=(()=>{
   if(p.grade)c.push(['📚 '+p.grade,'Grade level']);
   c.push([`❓ ${i.required} question${i.required===1?'':'s'}`,`Each student answers ${i.required} question${i.required===1?'':'s'}: one in each of ${i.required} room${i.required===1?'':'s'}. The game holds extra versions so classmates do not all get the same one.`]);
   c.push([({mc:'🔘 Multiple choice',both:'🔘✍️ Pick + explain',free:'✍️ Free response'})[i.answer||'free']+' · '+lengthLabel(i.answerSeconds)+(i.answerSeconds?' each':''),'How students answer, and the time they get for each question. Extra time costs a ⚡ cell.']);
+  if(i.hasContext)c.push(['📝 Tutor context','Notes to the tutor: '+(i.contextPreview||'')]);
   if(i.mode)c.push([MODES[i.mode]||'','Game mode']);
   if(i.roundMinutes)c.push(['⏲ '+i.roundMinutes+' min round','Imposters win if the round timer runs out']);
   return c.filter(x=>x[0]).map(([t,tip])=>`<span class="chip" title="${esc(tip)}">${esc(t)}</span>`).join('')}
@@ -163,7 +164,7 @@ const Classes=(()=>{
    box.querySelector('#f-movego').onclick=()=>act(()=>call('/api/folder/move',{id:cur.id,parent:box.querySelector('#f-movebox .move-pick').value}),'Folder moved.');
    box.querySelector('#f-del').onclick=()=>{const up=folderChain(cur.parent||'').pop();if(confirm(`Delete the folder “${cur.name}”? Its games and subfolders are not deleted: they move up to ${up?'“'+up.name+'”':'the top level'}.`))act(async()=>{await call('/api/folder/delete',{id:cur.id});curFolder=cur.parent||''})}}
   box.querySelectorAll('.saved-row').forEach(row=>{const id=row.dataset.id,p=savedList.find(x=>x.id===id),pane=n=>row.querySelector(`[data-box=${n}]`);
-   row.querySelector('[data-act=load]').onclick=async()=>{try{const r=await call('/api/pack/get',{id});pack=r.pack;savedId=id;if(pack.grade&&document.getElementById('grade-level'))document.getElementById('grade-level').value=pack.grade;preview();const had=typeof applySettings==='function'&&applySettings(pack.settings);toast('Loaded “'+p.title+'”. '+(had?'Its settings are filled in; change anything you like, then create the game.':'Pick your settings and create the game.'));document.getElementById('packtitle').scrollIntoView({behavior:'smooth'})}catch(e){toast(e.message)}};
+   row.querySelector('[data-act=load]').onclick=async()=>{try{const r=await call('/api/pack/get',{id});pack=r.pack;savedId=id;if(pack.grade&&document.getElementById('grade-level'))document.getElementById('grade-level').value=pack.grade;preview();const tc=document.getElementById('tutor-context');if(tc){tc.value=pack.context||'';tc.dispatchEvent(new Event('input'))}const had=typeof applySettings==='function'&&applySettings(pack.settings);toast('Loaded “'+p.title+'”. '+(pack.context?'Its tutor context is filled in. ':'')+(had?'Its settings are filled in; change anything you like, then create the game.':'Pick your settings and create the game.'));document.getElementById('packtitle').scrollIntoView({behavior:'smooth'})}catch(e){toast(e.message)}};
    row.querySelector('[data-act=move]').onclick=()=>pane('move').classList.toggle('hidden');
    row.querySelector('[data-act=movego]').onclick=()=>act(()=>call('/api/pack/move',{id,folder:pane('move').querySelector('.move-pick').value}),'Moved.');
    row.querySelector('[data-act=assign]').onclick=()=>pane('assign').classList.toggle('hidden');
@@ -232,6 +233,29 @@ const Classes=(()=>{
    try{const r=await call('/api/assist',{messages:msgs,material:document.getElementById('topics').value});msgs.push({role:'assistant',text:r.reply})}catch(e){toast(e.message);msgs.pop();input.value=text}finally{b.disabled=false;draw()}};
   document.getElementById('assist-send').onclick=send;input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
   helperText=()=>msgs.length?'Teacher planning conversation:\n'+msgs.map(m=>(m.role==='user'?'Teacher: ':'Helper: ')+m.text).join('\n'):'';
+ }
+
+
+ // ---------- tutor context: the teacher's standing notes to the chatbot, with dictation and an AI drafting helper
+ function contextMount(){
+  const box=document.getElementById('tutor-context');if(!box||document.getElementById('ctx-assist'))return;
+  document.getElementById('ctx-tools').classList.remove('hidden');document.getElementById('ctx-chips').classList.remove('hidden');
+  const count=document.getElementById('ctx-count'),upd=()=>{count.textContent=box.value.length+' / 2000'};box.addEventListener('input',upd);upd();
+  dictation(document.getElementById('dict-context'),box);
+  document.querySelectorAll('#ctx-chips [data-add]').forEach(b=>b.onclick=()=>{const add=b.dataset.add;if(box.value.includes(add))return;box.value=(box.value.trim()?box.value.trim()+'\n':'')+add;box.value=box.value.slice(0,2000);upd();box.dispatchEvent(new Event('input'))});
+  document.getElementById('ctx-chips').insertAdjacentHTML('afterend',`<details id="ctx-assist" class="lib-box"><summary>✨ AI helper for the tutor context</summary>
+   <p class="hint-text">The helper reads your material and what you tell it, then drafts the context. Ask for changes ("shorter", "add that they struggle with vocabulary"), and use the draft when you like it. Please leave out student names.</p>
+   <div id="ctx-log" class="chatlog" aria-live="polite" style="max-height:260px"></div>
+   <textarea id="ctx-input" rows="2" placeholder="For example: My 9th graders are new to physics and get discouraged easily. Keep it encouraging, and do not let the tutor give away answers."></textarea>
+   <div class="toolbar"><button type="button" id="dict-ctx-input" class="small">🎤 Dictate</button><button type="button" id="ctx-send" class="primary small">Ask the helper</button></div></details>`);
+  const log=document.getElementById('ctx-log'),input=document.getElementById('ctx-input'),msgs=[],details=document.getElementById('ctx-assist');
+  const draw=()=>{log.innerHTML=msgs.map((m,i)=>`<div class="bubble ${m.role==='user'?'user':''}"><small>${m.role==='user'?'YOU':'AI HELPER'}</small>${esc(m.text)}${m.draft?`<pre class="ctx-draft">${esc(m.draft)}</pre><button type="button" class="small primary" data-use="${i}">Use this draft</button>`:''}</div>`).join('');log.scrollTop=log.scrollHeight;
+   log.querySelectorAll('[data-use]').forEach(b=>b.onclick=()=>{const d=msgs[+b.dataset.use].draft;if(box.value.trim()&&box.value.trim()!==d&&!confirm('Replace what is in the context box with this draft?'))return;box.value=d;upd();box.dispatchEvent(new Event('input'));toast('Draft added. Edit it however you like.')})};
+  dictation(document.getElementById('dict-ctx-input'),input);
+  const ask=async(text)=>{const b=document.getElementById('ctx-send'),d=document.getElementById('ctx-draft');if(text)msgs.push({role:'user',text});input.value='';draw();b.disabled=d.disabled=true;
+   try{const r=await call('/api/context/assist',{messages:msgs.map(m=>({role:m.role,text:m.text})),current:box.value,material:document.getElementById('topics').value,grade:(document.getElementById('grade-level')||{}).value});msgs.push({role:'assistant',text:r.reply,draft:r.context})}catch(e){toast(e.message);if(text){msgs.pop();input.value=text}}finally{b.disabled=d.disabled=false;draw()}};
+  document.getElementById('ctx-send').onclick=()=>{const t=input.value.trim();if(t)ask(t)};input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();const t=input.value.trim();if(t)ask(t)}});
+  document.getElementById('ctx-draft').onclick=()=>{details.open=true;details.scrollIntoView({behavior:'smooth',block:'nearest'});if(msgs.length)input.focus();else ask('Draft the tutor context for my class.')};
  }
 
  // ---------- class picker inside game setup
