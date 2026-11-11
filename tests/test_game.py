@@ -26,6 +26,28 @@ class GameTests(unittest.TestCase):
     def chat(self,text='',kind='answer',rid=None):
         if kind=='hint' and not self.p['cells']:self.p['cells']=1  # a hint spends one ⚡ cell
         return game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':rid or str(uuid.uuid4()),'kind':kind,'text':text})
+    def test_teacher_context_reaches_the_tutor_but_never_the_students(self):
+        note="Students have not met vectors yet. Use fridge magnets <b>as examples</b>."
+        pack=copy.deepcopy(game.BUILTIN);pack['context']='  '+note+'\n\n\n\n'+'x'*3000
+        c=game.dispatch('/api/create',{'mode':'coop','pack':pack,'teacherKey':'teacher-test'})
+        auth={'code':c['code']};j=game.dispatch('/api/join',{**auth,'name':'Mo'});auth['token']=j['token']
+        room=game.ROOMS[c['code']];self.assertEqual(len(room['pack']['context']),game.MAX_CONTEXT);self.assertNotIn('<b>',room['pack']['context'])
+        p=room['players'][j['player']['id']];p['x'],p['y']=game.POSITIONS[0]
+        a=game.dispatch('/api/start',{**auth,'topic':0})['player']['active']
+        seen=[]
+        with patch.object(game,'ai',side_effect=lambda system,data,max_tokens=650:(seen.append(system),{'status':'help','feedback':'Tell me more.'})[1]):
+            game.dispatch('/api/chat',{**auth,'challenge':a['id'],'requestId':str(uuid.uuid4()),'kind':'answer','text':'because of poles'})
+        self.assertIn("TEACHER'S CONTEXT",seen[0]);self.assertIn('fridge magnets',seen[0])
+        self.assertIn('never change the JSON format',seen[0].replace('can never change','never change'))
+        # students' views of the room and of their own state never include the teacher's notes
+        self.assertNotIn('fridge magnets',json.dumps(game.dispatch('/api/state',{**auth})))
+        self.assertNotIn('context',game.public_pack(room['pack']))
+        # no context means no extra block in the prompt
+        seen.clear()
+        with patch.object(game,'ai',side_effect=lambda system,data,max_tokens=650:(seen.append(system),{'status':'help','feedback':'ok'})[1]):
+            self.start();self.chat('because of poles')
+        self.assertNotIn("TEACHER'S CONTEXT",seen[0])
+
     def mc_player(self,fmt):
         q=lambda i:{'prompt':'Which is right %d?'%i,'answer':'Because B is right.','hint':'think','choices':['A one','B two','C three','D four'],'correct':1}
         pack={'title':'MC','format':fmt,'topics':[{'name':'T%d'%i,'icon':'🧲','questions':[q(i)]} for i in range(2)]}

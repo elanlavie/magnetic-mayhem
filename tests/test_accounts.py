@@ -203,6 +203,20 @@ class ClassTests(unittest.TestCase):
             with self.assertRaises(accounts.AuthError): game.dispatch('/api/assist', {'userToken': self.alex, 'messages': [{'role': 'user', 'text': 'hi'}]})
             with self.assertRaises(game.GameError): game.dispatch('/api/assist', {'userToken': self.teacher, 'messages': []})
 
+    def test_context_helper_drafts_for_teachers_only_and_context_is_saved_with_the_game(self):
+        draft = {'reply': 'Here is a draft.', 'context': 'Use everyday examples.\nDo not give answers away.'}
+        with patch.object(game, 'ai', side_effect=lambda s, d, m=650: draft) as fake:
+            r = game.dispatch('/api/context/assist', {'userToken': self.teacher, 'messages': [], 'material': 'Magnetism unit', 'grade': '9th grade'})
+            self.assertEqual(r['context'], 'Use everyday examples.\nDo not give answers away.')
+            self.assertEqual(fake.call_args[0][1]['conversation'][0]['text'], 'Draft the tutor context for my class.')
+            self.assertEqual(fake.call_args[0][1]['curriculum_material'], 'Magnetism unit')
+            with self.assertRaises(accounts.AuthError): game.dispatch('/api/context/assist', {'userToken': self.alex, 'messages': [{'role': 'user', 'text': 'hi'}]})
+            with self.assertRaises(game.GameError): game.dispatch('/api/context/assist', {'userToken': self.teacher, 'messages': []})
+        topics = [{'name': 'R', 'icon': 'x', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'hint': 'h'}]}]
+        self.api('/api/pack/save', self.teacher, pack={'title': 'With notes', 'topics': topics, 'context': 'Keep replies short.'})
+        info = self.api('/api/pack/list', self.teacher)['packs'][0]['info']
+        self.assertTrue(info['hasContext']); self.assertEqual(info['contextPreview'], 'Keep replies short.')
+
     def test_classes_are_off_unless_enabled(self):
         accounts.MODE = 'off'
         with self.assertRaises(game.GameError): game.dispatch('/api/class/list', {})
