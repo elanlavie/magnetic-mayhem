@@ -227,7 +227,7 @@ def room_public(r):
         if r.get('game') and not item['alive']:item['x']=item['y']=None
         players.append(item)
     teams={team:sorted({i for member in r['players'].values() if member['team']==team for i in member['repairs']}) for team in ('crew','mint','violet')}
-    cell_pool(r);result={'cells':list(r['cellPool']['active']),'winner':r.get('winner'),'teamRepairs':teams,'code':r['code'],'mode':r['mode'],'gameType':r.get('gameType',game_types.DEFAULT),'pack':public_pack(r['pack']),'players':players,'paused':r['paused'],'closed':r.get('closed',False),'ai':True,'tutorModel':MODEL,'autoNames':r.get('autoNames',False),'first':r['first'],'followup':min(30,r['followup']),'created':r['created'],'allowStudy':r.get('allowStudy',False)}
+    cell_pool(r);result={'cells':list(r['cellPool']['active']),'winner':r.get('winner'),'teamRepairs':teams,'code':r['code'],'mode':r['mode'],'gameType':r.get('gameType',game_types.DEFAULT),'pack':public_pack(r['pack']),'players':players,'paused':r['paused'],'closed':r.get('closed',False),'ai':True,'tutorModel':MODEL,'autoNames':r.get('autoNames',False),'first':r['first'],'unlimited':r.get('unlimited',False),'followup':min(30,r['followup']),'created':r['created'],'allowStudy':r.get('allowStudy',False)}
     if r.get('game'):result['game']=social.public(r)
     return result
 
@@ -289,7 +289,7 @@ def snapshot(r,p): return {'room':room_public(r),'player':{**private_player(p),*
 
 def dispatch(path,d):
     if path=='/api/config': return {'live':bool(KEY),'model':MODEL if KEY else None,'teacherProtected':bool(TEACHER_KEY),'builtin':None if accounts.enabled() else BUILTIN,'gameTypes':game_types.public(),**accounts.public_config()}
-    if path.startswith('/api/auth/') or path.startswith('/api/class/') or path.startswith('/api/library/') or path.startswith('/api/pack/'):
+    if path.startswith('/api/auth/') or path.startswith('/api/class/') or path.startswith('/api/library/') or path.startswith('/api/pack/') or path.startswith('/api/folder/'):
         if not accounts.enabled():raise GameError('Classes are not enabled on this server.')
         if path=='/api/pack/save':
             if not isinstance(d.get('pack'),dict):raise GameError('Nothing to save yet.')
@@ -359,7 +359,7 @@ def dispatch(path,d):
     if path=='/api/create':
         source=ROOMS.get(str(d.get('source','')).upper()) if d.get('mode') in ('solo','impostorSolo') else None
         if d.get('source') and (not source or source.get('closed') or not source.get('allowStudy',False)): raise GameError('Study code not found, closed, or solo study is disabled.')
-        if source: d={**d,'gameType':source.get('gameType',game_types.DEFAULT),'pack':source['pack'],'live':source['ai'],'first':source['first'],'followup':min(30,source['followup']),'autoNames':source.get('autoNames',False)}
+        if source: d={**d,'gameType':source.get('gameType',game_types.DEFAULT),'pack':source['pack'],'live':source['ai'],'first':source['first'],'unlimited':source.get('unlimited',False),'followup':min(30,source['followup']),'autoNames':source.get('autoNames',False)}
         mode=d.get('mode','coop')
         if mode not in ('solo','coop','race','infiltration','impostorSolo'):raise GameError('Unknown game mode.')
         game_type=str(d.get('gameType') or game_types.DEFAULT)
@@ -381,7 +381,7 @@ def dispatch(path,d):
             if user['role']!='teacher' and not source and not saved_pack:raise GameError('Ask your teacher for a study code to practice on your own.')
             if not d.get('pack'):raise GameError('Add your questions before creating a game.')
         elif mode not in ('solo','impostorSolo'): teacher(d)
-        pack=validate_pack(copy.deepcopy(d.get('pack') or BUILTIN))
+        pack=validate_pack(copy.deepcopy(d.get('pack') or BUILTIN));pack.pop('settings',None)  # saved-game settings are for the teacher's list, not for students
         if d.get('tasksPerCrew'):
             try: pack['topics']=pack['topics'][:max(1,min(7,int(d['tasksPerCrew'])))]
             except (TypeError,ValueError): pass
@@ -390,7 +390,7 @@ def dispatch(path,d):
             if len(ROOMS)>300: raise GameError('Server room limit reached.')
             code=''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6))
             host=secrets.token_urlsafe(24)
-            r={'code':code,'host':host,'classId':class_id,'owner':owner,'gameType':game_type,'mode':d.get('mode','coop'),'pack':pack,'players':{},'created':time.time(),'paused':False,'closed':False,'allowStudy':bool(d.get('allowStudy',True)),'autoNames':bool(d.get('autoNames',False)),'ai':True,'grade':clean_grade(d.get('grade') or (pack.get('grade') if isinstance(pack,dict) else None)),'first':max(10,min(180,int(d.get('first',30)))),'followup':max(10,min(30,int(d.get('followup',30))))}
+            r={'code':code,'host':host,'classId':class_id,'owner':owner,'gameType':game_type,'mode':d.get('mode','coop'),'pack':pack,'players':{},'created':time.time(),'paused':False,'closed':False,'allowStudy':bool(d.get('allowStudy',True)),'autoNames':bool(d.get('autoNames',False)),'ai':True,'grade':clean_grade(d.get('grade') or (pack.get('grade') if isinstance(pack,dict) else None)),'first':max(10,min(180,int(d.get('first',30)))),'unlimited':bool(d.get('unlimited',False)),'followup':max(10,min(30,int(d.get('followup',30))))}
             if mode in ('infiltration','impostorSolo'):
                 r['mode']='infiltration';r['botPractice']=mode=='impostorSolo';r['soloRole']=d.get('soloRole','random')
                 social.configure(r,{**d,**({'impostors':1,'writtenDiscussion':True} if r['botPractice'] else {})})

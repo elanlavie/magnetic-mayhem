@@ -57,6 +57,7 @@ create table if not exists members (class_id text, email text, name text, joined
 create table if not exists invites (code text primary key, class_id text, expires real, uses integer default 0, max_uses integer default 0, revoked integer default 0);
 create table if not exists messages (id integer primary key autoincrement, class_id text, room text, email text, name text, qid text, topic text, role text, text text, ts real, flag text);
 create table if not exists packs (id text primary key, teacher text, title text, created real, data text, classes text default '[]');
+create table if not exists folders (id text primary key, teacher text, name text, parent text default '', created real);
 create table if not exists library (id text primary key, teacher text, title text, created real, questions text);
 create table if not exists alerts (id text primary key, class_id text, teacher text, student_email text, student_name text, category text, message_id integer, created real, status text, detail text, reviewed integer default 0);
 create index if not exists messages_student on messages (class_id, email, id);
@@ -79,6 +80,8 @@ def tx(db):
         conn.row_factory = sqlite3.Row
         try:
             conn.executescript(SCHEMA)
+            if not any(r['name'] == 'folder' for r in conn.execute('pragma table_info(packs)')):
+                conn.execute("alter table packs add column folder text default ''")  # saved games can live in a folder
             yield conn
             conn.commit()
         finally:
@@ -538,33 +541,92 @@ def _pack_in_class(r, class_id, class_teacher):
     return class_teacher == r['teacher'] if ids is None else str(class_id) in ids
 
 
+MAX_ROOMS = 7  # a game has at most this many rooms; students answer one question in each
+MC_SECONDS, FREE_SECONDS = 30, 60  # per-question answer time; keep in step with think_seconds() in server.py
+
+
+def _clean_settings(s):
+    """The game settings saved with a pack, so the teacher can see them in the list and reuse them. Unknown keys are dropped."""
+    if not isinstance(s, dict):
+        return {}
+
+    def num(k, lo, hi):
+        try:
+            return max(lo, min(hi, int(s[k])))
+        except (KeyError, TypeError, ValueError):
+            return None
+    out = {}
+    if s.get('gameType') in ('station', 'climb'):
+        out['gameType'] = s['gameType']
+    if s.get('mode') in ('infiltration', 'coop', 'race'):
+        out['mode'] = s['mode']
+    for k, lo, hi in (('followup', 10, 30), ('roundSeconds', 0, 3600), ('crewTargetPct', 50, 100), ('meetingSeconds', 0, 900),
+                      ('discussionSeconds', 15, 180), ('voteSeconds', 15, 300), ('briefingSeconds', 10, 120)):
+        v = num(k, lo, hi)
+        if v is not None:
+            out[k] = v
+    if s.get('tagDelay') == 'auto':
+        out['tagDelay'] = 'auto'
+    elif num('tagDelay', 0, 60) is not None:
+        out['tagDelay'] = num('tagDelay', 0, 60)
+    for k in ('interruptChats', 'writtenDiscussion', 'autoNames', 'allowStudy', 'unlimited'):
+        if isinstance(s.get(k), bool):
+            out[k] = s[k]
+    return out
+
+
+def _pack_info(data):
+    """What a teacher wants to see at a glance. 'required' is the number of rooms, which is how many questions each student
+    must answer; the pack holds several questions per room (and number variants) so students do not all get the same one."""
+    topics = data.get('topics', [])
+    fmt = data.get('format') or {}
+    mc, free = bool(fmt.get('mc')), bool(fmt.get('free', not fmt.get('mc')))
+    kind = 'both' if mc and free else 'mc' if mc else 'free'
+    s = data.get('settings') or {}
+    return {'required': min(MAX_ROOMS, len(topics)), 'pool': sum(len(t.get('questions', [])) for t in topics),
+            'answer': kind, 'answerSeconds': 0 if s.get('unlimited') else MC_SECONDS if kind == 'mc' else FREE_SECONDS,
+            'mode': s.get('mode') or '', 'roundMinutes': round(s.get('roundSeconds', 0) / 60) if s.get('roundSeconds') else 0,
+            'hasSettings': bool(s)}
+
+
 def _pack_summary(r, class_names=None):
     data = json.loads(r['data'])
     ids = _pack_class_ids(r)
     every = ids is None
     if every:
         ids = list((class_names or {}).keys())
+    info = _pack_info(data)
     return {'allClasses': every, 'id': r['id'], 'title': r['title'], 'created': r['created'],
-            'topics': len(data.get('topics', [])), 'questions': sum(len(t.get('questions', [])) for t in data.get('topics', [])),
+            'topics': len(data.get('topics', [])), 'questions': info['required'], 'info': info,
+            'folder': (r['folder'] if 'folder' in r.keys() else '') or '',
             'grade': str(data.get('grade') or '')[:30],
             'classes': [{'id': i, 'name': (class_names or {}).get(i, '')} for i in ids]}
 
 
-def pack_save(db, user, pack, pack_id=None):
+def pack_save(db, user, pack, pack_id=None, folder=None):
     need_teacher(user)
+    settings = _clean_settings(pack['settings']) if isinstance(pack.get('settings'), dict) else None
     title = str(pack.get('title') or 'My game')[:100]
+    pack = {k: v for k, v in pack.items() if k != 'settings'}
     with tx(db) as c:
+        if folder and not c.execute('select 1 from folders where id=? and teacher=?', (str(folder), user['email'])).fetchone():
+            folder = ''  # the folder is gone: save at the top level instead of failing
         if pack_id:
-            r = c.execute('select id from packs where id=? and teacher=?', (str(pack_id), user['email'])).fetchone()
+            r = c.execute('select id, data from packs where id=? and teacher=?', (str(pack_id), user['email'])).fetchone()
             if not r:
                 raise AuthError('Saved game not found.', 404)
+            # a re-save that carries no settings (for example a rebuilt question set) keeps the ones already saved
+            kept = json.loads(r['data']).get('settings') if settings is None else settings
+            pack = {**pack, 'settings': kept or {}}
             c.execute('update packs set title=?, data=? where id=?', (title, json.dumps(pack), r['id']))
             new_id = r['id']
         else:
             if c.execute('select count(*) n from packs where teacher=?', (user['email'],)).fetchone()['n'] >= 200:
                 raise AuthError('You have 200 saved games. Delete some first.')
             new_id = secrets.token_hex(6)
-            c.execute('insert into packs values (?,?,?,?,?,?)', (new_id, user['email'], title, time.time(), json.dumps(pack), '[]'))
+            pack = {**pack, 'settings': settings or {}}
+            c.execute('insert into packs (id, teacher, title, created, data, classes, folder) values (?,?,?,?,?,?,?)',
+                      (new_id, user['email'], title, time.time(), json.dumps(pack), '[]', str(folder or '')))
     return {'id': new_id, 'title': title}
 
 
@@ -579,6 +641,111 @@ def pack_list(db, user):
         s['classes'] = [x for x in s['classes'] if x['id'] in names]
         out.append(s)
     return out
+
+
+# ---------------------------------------------------------------- folders for saved games
+MAX_FOLDERS, MAX_FOLDER_DEPTH = 100, 5
+
+
+def folder_list(db, user):
+    need_teacher(user)
+    with tx(db) as c:
+        rows = c.execute('select id,name,parent from folders where teacher=? order by lower(name)', (user['email'],)).fetchall()
+    return [{'id': r['id'], 'name': r['name'], 'parent': r['parent'] or ''} for r in rows]
+
+
+def _folder_depth(c, teacher, folder_id):
+    depth, seen = 0, set()
+    while folder_id and folder_id not in seen:
+        seen.add(folder_id)
+        r = c.execute('select parent from folders where id=? and teacher=?', (folder_id, teacher)).fetchone()
+        if not r:
+            raise AuthError('Folder not found.', 404)
+        depth += 1
+        folder_id = r['parent']
+    return depth
+
+
+def folder_create(db, user, name, parent=''):
+    need_teacher(user)
+    name = ' '.join(str(name or '').split())[:60]
+    if not name:
+        raise AuthError('Give the folder a name.')
+    parent = str(parent or '')
+    with tx(db) as c:
+        if parent and _folder_depth(c, user['email'], parent) >= MAX_FOLDER_DEPTH:
+            raise AuthError(f'Folders can only go {MAX_FOLDER_DEPTH} levels deep.')
+        if c.execute('select count(*) n from folders where teacher=?', (user['email'],)).fetchone()['n'] >= MAX_FOLDERS:
+            raise AuthError(f'You have {MAX_FOLDERS} folders. Delete some first.')
+        fid = secrets.token_hex(6)
+        c.execute('insert into folders values (?,?,?,?,?)', (fid, user['email'], name, parent, time.time()))
+    return {'id': fid, 'name': name, 'parent': parent}
+
+
+def folder_rename(db, user, folder_id, name):
+    need_teacher(user)
+    name = ' '.join(str(name or '').split())[:60]
+    if not name:
+        raise AuthError('Give the folder a name.')
+    with tx(db) as c:
+        if not c.execute('update folders set name=? where id=? and teacher=?', (name, str(folder_id), user['email'])).rowcount:
+            raise AuthError('Folder not found.', 404)
+    return {'ok': True, 'name': name}
+
+
+def folder_move(db, user, folder_id, parent=''):
+    """Move a folder (with everything inside it) under another folder, or to the top level when parent is empty."""
+    need_teacher(user)
+    folder_id, parent = str(folder_id), str(parent or '')
+    with tx(db) as c:
+        if not c.execute('select 1 from folders where id=? and teacher=?', (folder_id, user['email'])).fetchone():
+            raise AuthError('Folder not found.', 404)
+        # Refuse a move into itself or one of its own subfolders.
+        walk, seen = parent, set()
+        while walk and walk not in seen:
+            if walk == folder_id:
+                raise AuthError('A folder cannot go inside itself.')
+            seen.add(walk)
+            r = c.execute('select parent from folders where id=? and teacher=?', (walk, user['email'])).fetchone()
+            if not r:
+                raise AuthError('Folder not found.', 404)
+            walk = r['parent']
+        below = _subtree_height(c, user['email'], folder_id)
+        if parent and _folder_depth(c, user['email'], parent) + below > MAX_FOLDER_DEPTH:
+            raise AuthError(f'Folders can only go {MAX_FOLDER_DEPTH} levels deep.')
+        c.execute('update folders set parent=? where id=?', (parent, folder_id))
+    return {'ok': True}
+
+
+def _subtree_height(c, teacher, folder_id):
+    kids = [r['id'] for r in c.execute('select id from folders where parent=? and teacher=?', (folder_id, teacher))]
+    return 1 + max((_subtree_height(c, teacher, k) for k in kids), default=0)
+
+
+def folder_delete(db, user, folder_id):
+    """Deleting a folder never deletes games: what was inside moves up to the folder's parent."""
+    need_teacher(user)
+    folder_id = str(folder_id)
+    with tx(db) as c:
+        r = c.execute('select parent from folders where id=? and teacher=?', (folder_id, user['email'])).fetchone()
+        if not r:
+            return {'ok': True}
+        up = r['parent'] or ''
+        c.execute('update packs set folder=? where folder=? and teacher=?', (up, folder_id, user['email']))
+        c.execute('update folders set parent=? where parent=? and teacher=?', (up, folder_id, user['email']))
+        c.execute('delete from folders where id=? and teacher=?', (folder_id, user['email']))
+    return {'ok': True}
+
+
+def pack_move(db, user, pack_id, folder=''):
+    need_teacher(user)
+    folder = str(folder or '')
+    with tx(db) as c:
+        if folder and not c.execute('select 1 from folders where id=? and teacher=?', (folder, user['email'])).fetchone():
+            raise AuthError('Folder not found.', 404)
+        if not c.execute('update packs set folder=? where id=? and teacher=?', (folder, str(pack_id), user['email'])).rowcount:
+            raise AuthError('Saved game not found.', 404)
+    return {'ok': True}
 
 
 def pack_get(db, user, pack_id):
@@ -809,9 +976,19 @@ def dispatch(db, path, d, ask=None):
     if path == '/api/class/alert/retry':
         return alert_retry(db, user, d.get('alertId'))
     if path == '/api/pack/save':
-        return pack_save(db, user, d.get('pack') or {}, d.get('id'))
+        return pack_save(db, user, d.get('pack') or {}, d.get('id'), d.get('folder'))
     if path == '/api/pack/list':
-        return {'packs': pack_list(db, user)}
+        return {'packs': pack_list(db, user), 'folders': folder_list(db, user)}
+    if path == '/api/pack/move':
+        return pack_move(db, user, d.get('id'), d.get('folder'))
+    if path == '/api/folder/create':
+        return folder_create(db, user, d.get('name'), d.get('parent'))
+    if path == '/api/folder/rename':
+        return folder_rename(db, user, d.get('id'), d.get('name'))
+    if path == '/api/folder/move':
+        return folder_move(db, user, d.get('id'), d.get('parent'))
+    if path == '/api/folder/delete':
+        return folder_delete(db, user, d.get('id'))
     if path == '/api/pack/get':
         return pack_get(db, user, d.get('id'))
     if path == '/api/pack/assign':
