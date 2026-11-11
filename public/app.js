@@ -132,7 +132,12 @@ function syncEncounter(force=false){const a=state?.player.active;if(!a||view!=='
  renderTimer();
 }
 let timeUpOpen=false;
-function timeUpNotice(id){timeUpOpen=true;pauseTimer();const el=document.createElement('div');el.id='timeup-overlay';el.className='timeup-overlay';el.setAttribute('role','alertdialog');el.setAttribute('aria-modal','true');el.innerHTML=`<div class="timeup-box"><div class="timeup-clock">⏰</div><h2>TIME’S UP!</h2><p class="timeup-main">The timer ran out, so you are being sent back to the map.</p><p class="timeup-sub">Nothing is broken. Your chat is saved. Walk back to the room and press Enter to try again.</p><button id="timeup-ok" class="primary">OK, back to the map</button></div>`;document.body.appendChild(el);$('#timeup-ok').focus();$('#timeup-ok').onclick=async()=>{el.remove();timeUpOpen=false;await leaveChat('');storageSet('mm-timer-'+id,null);canvas.focus()}}
+function timeUpNotice(id){timeUpOpen=true;pauseTimer();const el=document.createElement('div');el.id='timeup-overlay';el.className='timeup-overlay';el.setAttribute('role','alertdialog');el.setAttribute('aria-modal','true');
+ // Returns the player to the map by itself after a few seconds, so nobody can sit on this screen and stop playing.
+ let left=5,finished=false,tick=0;const sub=state?.room?.game?'Your chat is saved. Visit a different room next, then you can come back to this one.':'Your chat is saved. You can come back to it later.';
+ el.innerHTML=`<div class="timeup-box"><div class="timeup-clock">⏰</div><h2>TIME’S UP!</h2><p class="timeup-main">The timer ran out, so you are being sent back to the map.</p><p class="timeup-sub">${sub}</p><button id="timeup-ok" class="primary">Back to the map (<span id="timeup-left">${left}</span>)</button></div>`;document.body.appendChild(el);$('#timeup-ok').focus();
+ const finish=async()=>{if(finished)return;finished=true;clearInterval(tick);el.remove();timeUpOpen=false;await leaveChat('');storageSet('mm-timer-'+id,null);canvas.focus()};
+ $('#timeup-ok').onclick=finish;tick=setInterval(()=>{left--;const n=$('#timeup-left');if(n)n.textContent=Math.max(left,0);if(left<=0)finish()},1000)}
 async function leaveChat(why){closeSim();const a=state?.player.active;if(!a){$('#encounter').classList.add('hidden');return;}toast(why||'💾 Chat saved. Walk back to the station and press Enter to continue.');
  const epoch=++encounterEpoch;reqId=null;storageSet('mm-draft-'+a.id,$('#answer').value);pauseTimer();keys.clear();$('#encounter').classList.add('hidden');state.player.active=null;activeId='';sending=false;canvas.focus();
  try{const data=await api('/api/leave',auth());if(epoch===encounterEpoch){state=data;updateHUD()}}catch(e){toast('Your conversation is saved. Reconnecting…');await poll();}
