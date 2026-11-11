@@ -289,7 +289,7 @@ def snapshot(r,p): return {'room':room_public(r),'player':{**private_player(p),*
 
 def dispatch(path,d):
     if path=='/api/config': return {'live':bool(KEY),'model':MODEL if KEY else None,'teacherProtected':bool(TEACHER_KEY),'builtin':None if accounts.enabled() else BUILTIN,'gameTypes':game_types.public(),**accounts.public_config()}
-    if path.startswith('/api/auth/') or path.startswith('/api/class/') or path.startswith('/api/library/') or path.startswith('/api/pack/'):
+    if path.startswith('/api/auth/') or path.startswith('/api/class/') or path.startswith('/api/library/') or path.startswith('/api/pack/') or path.startswith('/api/folder/'):
         if not accounts.enabled():raise GameError('Classes are not enabled on this server.')
         if path=='/api/pack/save':
             if not isinstance(d.get('pack'),dict):raise GameError('Nothing to save yet.')
@@ -381,7 +381,7 @@ def dispatch(path,d):
             if user['role']!='teacher' and not source and not saved_pack:raise GameError('Ask your teacher for a study code to practice on your own.')
             if not d.get('pack'):raise GameError('Add your questions before creating a game.')
         elif mode not in ('solo','impostorSolo'): teacher(d)
-        pack=validate_pack(copy.deepcopy(d.get('pack') or BUILTIN))
+        pack=validate_pack(copy.deepcopy(d.get('pack') or BUILTIN));pack.pop('settings',None)  # saved-game settings are for the teacher's list, not for students
         if d.get('tasksPerCrew'):
             try: pack['topics']=pack['topics'][:max(1,min(7,int(d['tasksPerCrew'])))]
             except (TypeError,ValueError): pass

@@ -126,21 +126,55 @@ const Classes=(()=>{
  }
 
  // ---------- saved games: build once, reuse for any class or for solo practice
- let savedId=null,savedList=[];
- async function packsLoad(){try{savedList=(await call('/api/pack/list')).packs}catch{savedList=[]}packsRender()}
+ let savedId=null,savedList=[],folders=[],curFolder='';
+ async function packsLoad(){try{const r=await call('/api/pack/list');savedList=r.packs;folders=r.folders||[]}catch{savedList=[];folders=[]}if(curFolder&&!folders.some(f=>f.id===curFolder))curFolder='';packsRender()}
+ const byName=(a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'});
+ const folderChain=id=>{const out=[];let f=folders.find(x=>x.id===id),n=0;while(f&&n++<12){out.unshift(f);f=folders.find(x=>x.id===f.parent)}return out};
+ const gamesIn=id=>savedList.filter(p=>(p.folder||'')===id).length+folders.filter(f=>(f.parent||'')===id).reduce((n,f)=>n+gamesIn(f.id),0);
+ // Flat, indented list of folders for a "move to" menu. A folder you are moving is left out along with everything inside it.
+ function folderChoices(skip){const out=[['','📚 All games (top level)']],walk=(parent,depth)=>folders.filter(f=>(f.parent||'')===parent&&f.id!==skip).sort(byName).forEach(f=>{out.push([f.id,'  '.repeat(depth)+'📁 '+f.name]);walk(f.id,depth+1)});walk('',0);return out}
+ const moveMenu=(skip,current)=>`<select class="move-pick" aria-label="Move to folder">${folderChoices(skip).map(([id,l])=>`<option value="${esc(id)}" ${id===current?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
+ const lengthLabel=sec=>sec<60?sec+' s':(sec/60)+' min';
+ const MODES={infiltration:'🕵️ Imposter mission',coop:'🤝 Co-op rescue',race:'🏁 Team race'};
+ // The few settings a teacher needs at a glance. Each chip is short; the full details are in the tooltip.
+ function chips(p){const i=p.info||{},c=[];
+  if(p.grade)c.push(['📚 '+p.grade,'Grade level']);
+  c.push([`❓ ${i.required} question${i.required===1?'':'s'}`,`Each student answers ${i.required} question${i.required===1?'':'s'}: one in each of ${i.required} room${i.required===1?'':'s'}. The game holds extra versions so classmates do not all get the same one.`]);
+  c.push([({mc:'🔘 Multiple choice',both:'🔘✍️ Pick + explain',free:'✍️ Free response'})[i.answer||'free']+' · '+lengthLabel(i.answerSeconds||60)+' each','How students answer, and the time they get for each question. Extra time costs a ⚡ cell.']);
+  if(i.mode)c.push([MODES[i.mode]||'','Game mode']);
+  if(i.roundMinutes)c.push(['⏲ '+i.roundMinutes+' min round','Imposters win if the round timer runs out']);
+  return c.filter(x=>x[0]).map(([t,tip])=>`<span class="chip" title="${esc(tip)}">${esc(t)}</span>`).join('')}
  function packsRender(){const box=document.getElementById('saved-list');if(!box)return;
-  box.innerHTML=savedList.length?savedList.map(p=>`<div class="saved-row" data-id="${esc(p.id)}"><div><b>${esc(p.title)}</b> <span class="grade-tag">${p.grade?esc(p.grade):'grade not set'}</span> <span class="muted">${p.questions} questions · ${p.topics} topics</span><div class="hint-text">${p.allClasses?'Available to all your classes':p.classes.length?'Assigned to: '+p.classes.map(c=>esc(c.name)).join(', '):'Hidden from students'}</div></div><div class="toolbar"><button type="button" class="small" data-act="load">Use this game</button><button type="button" class="small" data-act="assign">Classes…</button><button type="button" class="small danger" data-act="del">Delete</button></div><div class="assign hidden">${classes.map(c=>`<label class="check"><input type="checkbox" value="${esc(c.id)}" ${p.allClasses||p.classes.some(x=>x.id===c.id)?'checked':''}> ${esc(c.name)}</label>`).join('')||'<span class="muted">Create a class first.</span>'}<button type="button" class="small primary" data-act="saveassign">Save</button></div></div>`).join(''):'<p class="hint-text">Nothing saved yet. Games you create are saved here automatically.</p>';
-  box.querySelectorAll('.saved-row').forEach(row=>{const id=row.dataset.id,p=savedList.find(x=>x.id===id);
-   row.querySelector('[data-act=load]').onclick=async()=>{try{const r=await call('/api/pack/get',{id});pack=r.pack;savedId=id;if(pack.grade&&document.getElementById('grade-level'))document.getElementById('grade-level').value=pack.grade;preview();toast('Loaded “'+p.title+'”. Pick your settings and create the game.');document.getElementById('packtitle').scrollIntoView({behavior:'smooth'})}catch(e){toast(e.message)}};
-   row.querySelector('[data-act=assign]').onclick=()=>row.querySelector('.assign').classList.toggle('hidden');
-   row.querySelector('[data-act=saveassign]').onclick=async()=>{try{const boxes=[...row.querySelectorAll('.assign input')],on=boxes.filter(i=>i.checked);await call('/api/pack/assign',{id,classIds:on.map(i=>i.value),all:boxes.length>0&&on.length===boxes.length});toast('Saved. Students in those classes can now play it on their own.');packsLoad()}catch(e){toast(e.message)}};
+  const here=folderChain(curFolder),subs=folders.filter(f=>(f.parent||'')===curFolder).sort(byName),games=savedList.filter(p=>(p.folder||'')===curFolder),cur=here[here.length-1];
+  const crumbs=`<nav class="crumbs" aria-label="Folder path"><button type="button" class="crumb" data-go="">📚 All games</button>${here.map(f=>` › <button type="button" class="crumb" data-go="${esc(f.id)}">${esc(f.name)}</button>`).join('')}</nav>`;
+  const bar=`<div class="saved-bar">${crumbs}<span class="toolbar"><button type="button" class="small" id="f-new">＋ New folder</button>${cur?'<button type="button" class="small" id="f-rename">Rename</button><button type="button" class="small" id="f-move">Move…</button><button type="button" class="small danger" id="f-del">Delete folder</button>':''}</span></div>${cur?`<div class="assign hidden" id="f-movebox">${moveMenu(cur.id,cur.parent||'')} <button type="button" class="small primary" id="f-movego">Move</button></div>`:''}`;
+  const folderRows=subs.map(f=>`<div class="folder-row"><button type="button" class="folder-open" data-open="${esc(f.id)}">📁 <b>${esc(f.name)}</b> <span class="muted">${gamesIn(f.id)} game${gamesIn(f.id)===1?'':'s'}</span></button></div>`).join('');
+  const gameRows=games.map(p=>`<div class="saved-row" data-id="${esc(p.id)}"><div><b>${esc(p.title)}</b><div class="chips">${chips(p)}</div><div class="hint-text">${p.allClasses?'Available to all your classes':p.classes.length?'Assigned to: '+p.classes.map(c=>esc(c.name)).join(', '):'Hidden from students'}</div></div><div class="toolbar"><button type="button" class="small" data-act="load">Use this game</button><button type="button" class="small" data-act="move">Move…</button><button type="button" class="small" data-act="assign">Classes…</button><button type="button" class="small danger" data-act="del">Delete</button></div><div class="assign hidden" data-box="move">${moveMenu('',p.folder||'')} <button type="button" class="small primary" data-act="movego">Move</button></div><div class="assign hidden" data-box="assign">${classes.map(c=>`<label class="check"><input type="checkbox" value="${esc(c.id)}" ${p.allClasses||p.classes.some(x=>x.id===c.id)?'checked':''}> ${esc(c.name)}</label>`).join('')||'<span class="muted">Create a class first.</span>'}<button type="button" class="small primary" data-act="saveassign">Save</button></div></div>`).join('');
+  const empty=!subs.length&&!games.length?`<p class="hint-text">${cur?'This folder is empty. New games you create while you are in it are saved here. You can also move games in with “Move…”.':savedList.length?'':'Nothing saved yet. Games you create are saved here automatically.'}</p>`:'';
+  box.innerHTML=bar+folderRows+gameRows+empty+(curFolder?`<p class="hint-text">New games you create are saved in “${esc(cur.name)}”.</p>`:'');
+  const go=id=>{curFolder=id;packsRender()};
+  box.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+  box.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>go(b.dataset.open));
+  const act=async(fn,ok)=>{try{await fn();if(ok)toast(ok);await packsLoad()}catch(e){toast(e.message)}};
+  box.querySelector('#f-new').onclick=()=>{const name=(prompt(cur?`New folder inside “${cur.name}”:`:'Name the new folder (for example a subject or unit):')||'').trim();if(name)act(async()=>{const r=await call('/api/folder/create',{name,parent:curFolder});curFolder=r.id})};
+  if(cur){
+   box.querySelector('#f-rename').onclick=()=>{const name=(prompt('Rename folder:',cur.name)||'').trim();if(name&&name!==cur.name)act(()=>call('/api/folder/rename',{id:cur.id,name}))};
+   box.querySelector('#f-move').onclick=()=>box.querySelector('#f-movebox').classList.toggle('hidden');
+   box.querySelector('#f-movego').onclick=()=>act(()=>call('/api/folder/move',{id:cur.id,parent:box.querySelector('#f-movebox .move-pick').value}),'Folder moved.');
+   box.querySelector('#f-del').onclick=()=>{const up=folderChain(cur.parent||'').pop();if(confirm(`Delete the folder “${cur.name}”? Its games and subfolders are not deleted: they move up to ${up?'“'+up.name+'”':'the top level'}.`))act(async()=>{await call('/api/folder/delete',{id:cur.id});curFolder=cur.parent||''})}}
+  box.querySelectorAll('.saved-row').forEach(row=>{const id=row.dataset.id,p=savedList.find(x=>x.id===id),pane=n=>row.querySelector(`[data-box=${n}]`);
+   row.querySelector('[data-act=load]').onclick=async()=>{try{const r=await call('/api/pack/get',{id});pack=r.pack;savedId=id;if(pack.grade&&document.getElementById('grade-level'))document.getElementById('grade-level').value=pack.grade;preview();const had=typeof applySettings==='function'&&applySettings(pack.settings);toast('Loaded “'+p.title+'”. '+(had?'Its settings are filled in; change anything you like, then create the game.':'Pick your settings and create the game.'));document.getElementById('packtitle').scrollIntoView({behavior:'smooth'})}catch(e){toast(e.message)}};
+   row.querySelector('[data-act=move]').onclick=()=>pane('move').classList.toggle('hidden');
+   row.querySelector('[data-act=movego]').onclick=()=>act(()=>call('/api/pack/move',{id,folder:pane('move').querySelector('.move-pick').value}),'Moved.');
+   row.querySelector('[data-act=assign]').onclick=()=>pane('assign').classList.toggle('hidden');
+   row.querySelector('[data-act=saveassign]').onclick=async()=>{try{const boxes=[...pane('assign').querySelectorAll('input')],on=boxes.filter(i=>i.checked);await call('/api/pack/assign',{id,classIds:on.map(i=>i.value),all:boxes.length>0&&on.length===boxes.length});toast('Saved. Students in those classes can now play it on their own.');packsLoad()}catch(e){toast(e.message)}};
    row.querySelector('[data-act=del]').onclick=async()=>{if(!confirm('Delete “'+p.title+'”? Students lose access to it.'))return;try{await call('/api/pack/delete',{id});if(savedId===id)savedId=null;packsLoad()}catch(e){toast(e.message)}}})}
  function packsMount(){
   if(document.getElementById('savedbox'))return;
   document.getElementById('packtitle').insertAdjacentHTML('beforebegin','<details id="savedbox" class="lib-box" open><summary>🗂️ My saved games <span class="muted">(build once, reuse anywhere)</span></summary><div id="saved-list"></div></details>');
   packsLoad()}
  // Save (or update) the current pack. Returns its id so a room or solo game can be created from it.
- async function savePack(){if(!pack)return null;try{const r=await call('/api/pack/save',{pack,id:savedId||undefined});savedId=r.id;packsLoad();return r.id}catch(e){if(savedId){savedId=null;return savePack()}return null}}
+ async function savePack(){if(!pack)return null;try{const r=await call('/api/pack/save',{pack,id:savedId||undefined,folder:savedId?undefined:curFolder||undefined});savedId=r.id;packsLoad();return r.id}catch(e){if(savedId){savedId=null;return savePack()}return null}}
  function resetSaved(){savedId=null}
  function libMount(){
   if(document.getElementById('libbox'))return;

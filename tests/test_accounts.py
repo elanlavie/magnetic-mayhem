@@ -286,6 +286,58 @@ class ClassTests(unittest.TestCase):
             self.api('/api/class/alert/retry', self.teacher, alertId=alert['id']); retry.assert_called_once()
 
 
+    def test_saved_game_summary_counts_rooms_not_every_question(self):
+        # 3 rooms with 4 questions each: students answer 3 questions, so the list says 3, not 12
+        topics = [{'name': f'Room {i}', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'hint': 'h'}] * 4} for i in range(3)]
+        saved = self.api('/api/pack/save', self.teacher, pack={'title': 'Magnets', 'grade': '9th grade', 'format': {'mc': True, 'free': False}, 'topics': topics,
+                         'settings': {'mode': 'infiltration', 'roundSeconds': 600, 'followup': 20, 'bogus': 1}})
+        p = self.api('/api/pack/list', self.teacher)['packs'][0]
+        self.assertEqual((p['questions'], p['info']['required'], p['info']['pool']), (3, 3, 12))
+        self.assertEqual((p['info']['answer'], p['info']['answerSeconds'], p['info']['mode'], p['info']['roundMinutes']), ('mc', 30, 'infiltration', 10))
+        got = self.api('/api/pack/get', self.teacher, id=saved['id'])['pack']['settings']
+        self.assertEqual(got, {'mode': 'infiltration', 'roundSeconds': 600, 'followup': 20})  # unknown keys dropped
+        # re-saving without settings (a rebuilt question set) keeps the saved ones
+        self.api('/api/pack/save', self.teacher, pack={'title': 'Magnets', 'topics': topics}, id=saved['id'])
+        self.assertEqual(self.api('/api/pack/get', self.teacher, id=saved['id'])['pack']['settings']['mode'], 'infiltration')
+        # free response takes a minute; settings never reach students in a live room
+        free = self.api('/api/pack/save', self.teacher, pack={'title': 'Free', 'topics': topics[:1]})
+        info = {x['id']: x['info'] for x in self.api('/api/pack/list', self.teacher)['packs']}[free['id']]
+        self.assertEqual((info['answer'], info['answerSeconds'], info['hasSettings']), ('free', 60, False))
+        room = self.api('/api/create', self.teacher, classId=self.cls['id'], mode='coop', pack=self.api('/api/pack/get', self.teacher, id=saved['id'])['pack'])
+        self.assertNotIn('settings', game.ROOMS[room['code']]['pack'])
+
+    def test_folders_nest_move_and_never_delete_games(self):
+        a = self.api('/api/folder/create', self.teacher, name='  Physics  ')
+        self.assertEqual(a['name'], 'Physics')
+        b = self.api('/api/folder/create', self.teacher, name='Magnetism', parent=a['id'])
+        pack = {'title': 'Circuits', 'topics': [{'name': 'Ohm', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'hint': 'h'}]}]}
+        g = self.api('/api/pack/save', self.teacher, pack=pack, folder=b['id'])  # new games land in the folder being viewed
+        listed = self.api('/api/pack/list', self.teacher)
+        self.assertEqual(listed['packs'][0]['folder'], b['id'])
+        self.assertEqual({f['id']: f['parent'] for f in listed['folders']}, {a['id']: '', b['id']: a['id']})
+        # a folder cannot go inside itself or its own subfolder
+        for bad in (a['id'], b['id']):
+            with self.assertRaises(accounts.AuthError): self.api('/api/folder/move', self.teacher, id=a['id'], parent=bad)
+        # depth is limited
+        parent = b['id']
+        with self.assertRaises(accounts.AuthError):
+            for i in range(10): parent = self.api('/api/folder/create', self.teacher, name=f'deep{i}', parent=parent)['id']
+        # moving a game, and other teachers cannot see or use the folders
+        self.api('/api/pack/move', self.teacher, id=g['id'], folder=a['id'])
+        self.assertEqual(self.api('/api/pack/list', self.teacher)['packs'][0]['folder'], a['id'])
+        other = self.sign('other@wccusd.net', 'Other Teacher')
+        self.assertEqual(self.api('/api/pack/list', other)['folders'], [])
+        with self.assertRaises(accounts.AuthError): self.api('/api/pack/move', other, id=g['id'], folder='')
+        with self.assertRaises(accounts.AuthError): self.api('/api/folder/create', other, name='x', parent=a['id'])
+        # deleting a folder keeps its games and subfolders, moving them up a level
+        self.api('/api/pack/move', self.teacher, id=g['id'], folder=b['id'])
+        self.api('/api/folder/delete', self.teacher, id=b['id'])
+        after = self.api('/api/pack/list', self.teacher)
+        self.assertEqual(after['packs'][0]['folder'], a['id'])
+        self.api('/api/folder/delete', self.teacher, id=a['id'])
+        self.assertEqual(self.api('/api/pack/list', self.teacher)['packs'][0]['folder'], '')
+        self.assertNotIn(a['id'], [f['id'] for f in self.api('/api/pack/list', self.teacher)['folders']])
+
     def test_saved_packs_are_reusable_and_assignable(self):
         pack = {'title': 'Circuits', 'topics': [{'name': 'Ohm', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'hint': 'h'}]}]}
         saved = self.api('/api/pack/save', self.teacher, pack=pack)
