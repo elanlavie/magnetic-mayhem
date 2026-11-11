@@ -306,6 +306,15 @@ class ClassTests(unittest.TestCase):
         room = self.api('/api/create', self.teacher, classId=self.cls['id'], mode='coop', pack=self.api('/api/pack/get', self.teacher, id=saved['id'])['pack'])
         self.assertNotIn('settings', game.ROOMS[room['code']]['pack'])
 
+    def test_unlimited_time_is_saved_and_reaches_the_room(self):
+        pack = {'title': 'Calm', 'topics': [{'name': 'Room', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'hint': 'h'}]}], 'settings': {'unlimited': True}}
+        saved = self.api('/api/pack/save', self.teacher, pack=pack)
+        self.assertEqual(self.api('/api/pack/list', self.teacher)['packs'][0]['info']['answerSeconds'], 0)
+        room = self.api('/api/create', self.teacher, classId=self.cls['id'], mode='coop', unlimited=True, pack=self.api('/api/pack/get', self.teacher, id=saved['id'])['pack'])
+        self.assertTrue(game.ROOMS[room['code']]['unlimited'])
+        normal = self.api('/api/create', self.teacher, classId=self.cls['id'], mode='coop', pack=pack)
+        self.assertFalse(game.ROOMS[normal['code']]['unlimited'])
+
     def test_folders_nest_move_and_never_delete_games(self):
         a = self.api('/api/folder/create', self.teacher, name='  Physics  ')
         self.assertEqual(a['name'], 'Physics')

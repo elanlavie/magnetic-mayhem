@@ -134,13 +134,13 @@ const Classes=(()=>{
  // Flat, indented list of folders for a "move to" menu. A folder you are moving is left out along with everything inside it.
  function folderChoices(skip){const out=[['','📚 All games (top level)']],walk=(parent,depth)=>folders.filter(f=>(f.parent||'')===parent&&f.id!==skip).sort(byName).forEach(f=>{out.push([f.id,'  '.repeat(depth)+'📁 '+f.name]);walk(f.id,depth+1)});walk('',0);return out}
  const moveMenu=(skip,current)=>`<select class="move-pick" aria-label="Move to folder">${folderChoices(skip).map(([id,l])=>`<option value="${esc(id)}" ${id===current?'selected':''}>${esc(l)}</option>`).join('')}</select>`;
- const lengthLabel=sec=>sec<60?sec+' s':(sec/60)+' min';
+ const lengthLabel=sec=>!sec?'unlimited time':sec<60?sec+' s':(sec/60)+' min';
  const MODES={infiltration:'🕵️ Imposter mission',coop:'🤝 Co-op rescue',race:'🏁 Team race'};
  // The few settings a teacher needs at a glance. Each chip is short; the full details are in the tooltip.
  function chips(p){const i=p.info||{},c=[];
   if(p.grade)c.push(['📚 '+p.grade,'Grade level']);
   c.push([`❓ ${i.required} question${i.required===1?'':'s'}`,`Each student answers ${i.required} question${i.required===1?'':'s'}: one in each of ${i.required} room${i.required===1?'':'s'}. The game holds extra versions so classmates do not all get the same one.`]);
-  c.push([({mc:'🔘 Multiple choice',both:'🔘✍️ Pick + explain',free:'✍️ Free response'})[i.answer||'free']+' · '+lengthLabel(i.answerSeconds||60)+' each','How students answer, and the time they get for each question. Extra time costs a ⚡ cell.']);
+  c.push([({mc:'🔘 Multiple choice',both:'🔘✍️ Pick + explain',free:'✍️ Free response'})[i.answer||'free']+' · '+lengthLabel(i.answerSeconds)+(i.answerSeconds?' each':''),'How students answer, and the time they get for each question. Extra time costs a ⚡ cell.']);
   if(i.mode)c.push([MODES[i.mode]||'','Game mode']);
   if(i.roundMinutes)c.push(['⏲ '+i.roundMinutes+' min round','Imposters win if the round timer runs out']);
   return c.filter(x=>x[0]).map(([t,tip])=>`<span class="chip" title="${esc(tip)}">${esc(t)}</span>`).join('')}

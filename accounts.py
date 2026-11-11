@@ -569,7 +569,7 @@ def _clean_settings(s):
         out['tagDelay'] = 'auto'
     elif num('tagDelay', 0, 60) is not None:
         out['tagDelay'] = num('tagDelay', 0, 60)
-    for k in ('interruptChats', 'writtenDiscussion', 'autoNames', 'allowStudy'):
+    for k in ('interruptChats', 'writtenDiscussion', 'autoNames', 'allowStudy', 'unlimited'):
         if isinstance(s.get(k), bool):
             out[k] = s[k]
     return out
@@ -584,7 +584,7 @@ def _pack_info(data):
     kind = 'both' if mc and free else 'mc' if mc else 'free'
     s = data.get('settings') or {}
     return {'required': min(MAX_ROOMS, len(topics)), 'pool': sum(len(t.get('questions', [])) for t in topics),
-            'answer': kind, 'answerSeconds': MC_SECONDS if kind == 'mc' else FREE_SECONDS,
+            'answer': kind, 'answerSeconds': 0 if s.get('unlimited') else MC_SECONDS if kind == 'mc' else FREE_SECONDS,
             'mode': s.get('mode') or '', 'roundMinutes': round(s.get('roundSeconds', 0) / 60) if s.get('roundSeconds') else 0,
             'hasSettings': bool(s)}
 
