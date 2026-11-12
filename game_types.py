@@ -15,10 +15,12 @@ GAME_TYPES={
     'climb':{'name':'Tower climb','icon':'🧗',
              'summary':'A jumping platformer. Hop up the tower, and every ledge gate is a question for the tutor. First to the summit wins the race.',
              'available':True,'modes':('solo','coop','race')},
+    'chat':{'name':'Chat','icon':'💬','summary':'A plain back-and-forth with the tutor, one question at a time. Used for homework.',
+            'available':True,'modes':('solo',),'hidden':True},
 }
 
 def public():
-    return [{'id':k,'name':v['name'],'icon':v['icon'],'summary':v['summary'],'available':v['available']} for k,v in GAME_TYPES.items()]
+    return [{'id':k,'name':v['name'],'icon':v['icon'],'summary':v['summary'],'available':v['available']} for k,v in GAME_TYPES.items() if not v.get('hidden')]
 
 def check(game_type,mode):
     """Return an error message if this type or mode can't be used, otherwise None."""
