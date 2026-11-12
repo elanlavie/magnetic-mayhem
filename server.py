@@ -17,6 +17,7 @@ LOCK=threading.RLock()
 ROOMS={}
 POSITIONS=[(250,240),(800,220),(1350,240),(260,650),(800,650),(1340,650),(800,1010)]
 social.STATIONS=POSITIONS
+social.CREDITED=lambda room,p:accounts.hw_credited(DB,p['email'],room['assignmentId']) if room.get('assignmentId') and p.get('email') else set()
 
 def _record_round(rec):
     try:accounts.record_round(DB,rec)
@@ -324,6 +325,7 @@ def log_chat(r,p,a,role,text):
 def screen_chat(r,p,mid,category):
     if mid and category:accounts.flag_message(DB,r['classId'],mid,p['email'],p.get('realName') or p['name'],category)
 
+PASTE_MIN=100;PASTE_SHARE=.5  # pasted characters, and the share of the answer they must make up, before it is flagged
 CLIMB_W=900;CLIMB_MAX_Y=40000;CLIMB_CAP=40
 def climb_floors(r):
     """The tower has one floor per question, up to a sensible height."""
@@ -442,7 +444,8 @@ def dispatch(path,d):
         if d.get('assignmentId'):
             if not accounts.enabled():raise GameError('Homework needs classes to be enabled.')
             homework=accounts.hw_for_play(DB,accounts.user_for(DB,d)['email'],d['assignmentId'])
-            d={**d,'mode':'solo','gameType':d.get('gameType') if d.get('gameType') in ('chat','climb') else 'chat','classId':homework['classId'],'pack':homework['pack'],'packId':None,'source':'','first':30,'followup':30,'unlimited':True}
+            gt=d.get('gameType') if d.get('gameType') in ('chat','climb','station') else 'chat'
+            d={**d,'mode':'impostorSolo' if gt=='station' else 'solo','gameType':gt,'classId':homework['classId'],'pack':homework['pack'],'packId':None,'source':'','first':30,'followup':30,'unlimited':True}
         source=ROOMS.get(str(d.get('source','')).upper()) if d.get('mode') in ('solo','impostorSolo') else None
         if d.get('source') and (not source or source.get('closed') or not source.get('allowStudy',False)): raise GameError('Study code not found, closed, or solo study is disabled.')
         if source: d={**d,'gameType':source.get('gameType',game_types.DEFAULT),'pack':source['pack'],'live':source['ai'],'first':source['first'],'unlimited':source.get('unlimited',False),'followup':min(30,source['followup']),'autoNames':source.get('autoNames',False)}
@@ -677,6 +680,10 @@ def dispatch(path,d):
         a['busy']=True; history=copy.deepcopy(a['messages']); repairing=a['repair'];chat_round=p.get('socialRound')
     mid=log_chat(r,p,a,'student',text if kind=='answer' else ('[asked for a hint]' if kind=='hint' else '[asked for the worked explanation]'))
     if kind=='answer' and not local:screen_chat(r,p,mid,accounts.screen(text))
+    # homework: an answer that was mostly pasted in is flagged for the teacher and does not earn credit
+    body=text.split('My reasoning: ',1)[-1];pasted=max(0,min(int(d.get('pasted') or 0) if str(d.get('pasted') or 0).lstrip('-').isdigit() else 0,100000))
+    pasteflag=bool(r.get('assignmentId') and kind=='answer' and not local and pasted>=PASTE_MIN and pasted>=PASTE_SHARE*len(body))
+    if pasteflag and mid:accounts.mark_message(DB,mid,'pasted')
     try:
         result=local or ai(TUTOR_PROMPT.replace('{GRADE}',r.get('grade','9th grade'))+context_block(r['pack']),{'grade_level':r.get('grade','9th grade'),'question':q,'conversation':history[-14:],'student':text,'student_choice':picked,'request_type':kind,'repairing':repairing},650)
         if result.get('status') not in ('correct','incorrect','help') or not isinstance(result.get('feedback'),str): raise GameError('The tutor returned an invalid response. Retry without losing an attempt.')
@@ -708,9 +715,10 @@ def dispatch(path,d):
                     social.conversation_completed(r,p,qid);social.record_task(r,p,qid)
                     if kind=='answer' and not local and not mcmiss and not a['repair'] and result.get('safety','none') in ('none','',None):social.note_explanation(r,p,a['topic'],q['prompt'],text.split('My reasoning: ',1)[-1])
                 a['done']=True
-                if r.get('assignmentId') and p.get('email') and kind=='answer' and not mcmiss and not a['repair'] and result.get('safety','none') in ('none','',None):
+                if r.get('assignmentId') and p.get('email') and kind=='answer' and not mcmiss and not a['repair'] and not pasteflag and result.get('safety','none') in ('none','',None):
                     p['hwNew']=qid not in accounts.hw_credited(DB,p['email'],r['assignmentId']);accounts.hw_credit(DB,p['email'],r['assignmentId'],qid)
                 if r.get('gameType')=='climb' and r['mode']=='race' and not r.get('winner') and len(p['completed'])>=climb_floors(r):r['winner']=p['team']
+            if pasteflag:result['feedback']=result['feedback'][:3200]+'\n\n⚠️ This answer was pasted in, so it was flagged and will not count toward your homework. Your teacher may check in with you. Write it in your own words and try again.'
             a['messages'].append({'role':'assistant','text':result['feedback'][:3500]})
             p['cache'][rid]=True
             if len(p['cache'])>120: p['cache'].pop(next(iter(p['cache'])))

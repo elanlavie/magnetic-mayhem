@@ -430,5 +430,46 @@ class ClassTests(unittest.TestCase):
         self.api('/api/hw/delete', self.teacher, id=hw['id'])
         self.assertEqual(self.api('/api/hw/list', self.teacher)['assignments'], [])
 
+    def test_homework_chat_is_visible_to_the_teacher_and_safety_alerts_still_fire(self):
+        pid = self.api('/api/pack/save', self.teacher, pack=copy.deepcopy(game.BUILTIN))['id']
+        hw = self.api('/api/hw/create', self.teacher, classId=self.cls['id'], packId=pid)
+        made = game.dispatch('/api/create', {'userToken': self.alex, 'assignmentId': hw['id'], 'gameType': 'chat'})
+        joined = game.dispatch('/api/join', {'userToken': self.alex, 'code': made['code']})
+        auth = {'userToken': self.alex, 'code': made['code'], 'token': joined['token']}
+        a = game.dispatch('/api/start', auth)['player']['active']
+        text = 'honestly i want to kill myself ' + 'x' * 120
+        game.dispatch('/api/chat', {**auth, 'challenge': a['id'], 'requestId': str(uuid.uuid4()), 'kind': 'answer', 'text': text, 'pasted': 140})
+        convo = self.api('/api/class/transcript', self.teacher, classId=self.cls['id'], email='alexander.smith@wccschools.org')['conversations']
+        flags = {m['flag'] for g in convo for m in g['messages'] if m['role'] == 'student'}
+        self.assertTrue(flags & set(accounts.CATEGORIES))
+        self.assertEqual(len(self.api('/api/class/alerts', self.teacher)['alerts']), 1)
+
+    def test_pasted_homework_answers_are_flagged_and_earn_no_credit(self):
+        pid = self.api('/api/pack/save', self.teacher, pack=copy.deepcopy(game.BUILTIN))['id']
+        hw = self.api('/api/hw/create', self.teacher, classId=self.cls['id'], packId=pid)
+        made = game.dispatch('/api/create', {'userToken': self.alex, 'assignmentId': hw['id'], 'gameType': 'chat'})
+        joined = game.dispatch('/api/join', {'userToken': self.alex, 'code': made['code']})
+        auth = {'userToken': self.alex, 'code': made['code'], 'token': joined['token']}
+        text = 'Magnets have poles and the field lines run from north to south so unlike poles attract each other strongly. ' * 2
+        def go(pasted):
+            a = game.dispatch('/api/start', auth)['player']['active']
+            with patch.object(game, 'ai', side_effect=lambda *x, **k: {'status': 'correct', 'feedback': 'Great', 'safety': 'none'}):
+                game.dispatch('/api/chat', {**auth, 'challenge': a['id'], 'requestId': str(uuid.uuid4()), 'kind': 'answer', 'text': text, 'pasted': pasted})
+            game.get(auth)[1]['active'] = None
+        go(len(text)); self.assertEqual(self.api('/api/hw/list', self.alex)['assignments'][0]['done'], 0)
+        rep = self.api('/api/hw/report', self.teacher, id=hw['id'])['students'][0]; self.assertEqual(rep['pasted'], 1)
+        go(10); self.assertEqual(self.api('/api/hw/list', self.alex)['assignments'][0]['done'], 1)  # a few pasted words are fine
+
+    def test_homework_imposter_practice_asks_questions_without_credit(self):
+        pid = self.api('/api/pack/save', self.teacher, pack=copy.deepcopy(game.BUILTIN))['id']
+        hw = self.api('/api/hw/create', self.teacher, classId=self.cls['id'], packId=pid)
+        for q in ('0:0', '1:1'): accounts.hw_credit(game.DB, 'alexander.smith@wccschools.org', hw['id'], q)
+        made = game.dispatch('/api/create', {'userToken': self.alex, 'assignmentId': hw['id'], 'gameType': 'station'})
+        r = game.ROOMS[made['code']]
+        self.assertEqual((r['gameType'], r['mode'], r['assignmentId'] == hw['id'], bool(r.get('botPractice'))), ('station', 'infiltration', True, True))
+        joined = game.dispatch('/api/join', {'userToken': self.alex, 'code': made['code']})
+        me = game.get({'userToken': self.alex, 'code': made['code'], 'token': joined['token']})[1]
+        self.assertNotIn('0:0', me['roundTasks']); self.assertNotIn('1:1', me['roundTasks'])
+
 
 if __name__ == '__main__': unittest.main()

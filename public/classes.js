@@ -298,7 +298,7 @@ const Classes=(()=>{
   if(!token())return signInScreen();
   try{const r=await call('/api/auth/me');user=r.user;classes=r.classes;afterSignIn()}catch{needSignIn('Your session ended. Please sign in again.')}
  }
- return {helperText:()=>helperText(),init,token,dictation,savePack,resetSaved,packsLoad,needSignIn,classId,firstClass,prepareSetup,get user(){return user},get classes(){return classes}};
+ return {helperText:()=>helperText(),transcript:(classId,email,name)=>transcript(classId,email,name),init,token,dictation,savePack,resetSaved,packsLoad,needSignIn,classId,firstClass,prepareSetup,get user(){return user},get classes(){return classes}};
 })();
 
 window.Classes=Classes;
