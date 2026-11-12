@@ -7,8 +7,7 @@
     if(typeof state==='undefined'||!state||view!=='game'){return}
     const r=state.room,p=state.player,g=r.game,parts=[];
     if(r.gameType==='climb'){
-      const floors=r.floors||1;parts.push(`🧗 ${Math.min(floors,p.completed.length)} / ${floors}`);
-      const best=Math.max(0,...r.players.filter(x=>x.id!==p.id).map(x=>x.completed.length));if(r.players.length>1)parts.push(`🏁 best ${Math.min(floors,best)}`);
+      // the tower draws its own energy and height readout on the map
     }else if(g&&typeof socialSeconds==='function'){
       if(g.phase==='lobby')parts.push('⏳ waiting for teacher');
       else{

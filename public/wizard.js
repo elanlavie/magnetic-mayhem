@@ -44,7 +44,7 @@
 (function(){
   const gt=$('#gametype'),gm=$('#gamemode');if(!gt||!gm)return;
   const station=gm.innerHTML;
-  function syncGameType(){const cur=gm.value;gm.innerHTML=gt.value==='climb'?'<option value="coop" selected>🧗 Class climb: everyone climbs together</option><option value="race">🏁 Two-team climbing race</option>':station;if([...gm.options].some(o=>o.value===cur))gm.value=cur;gm.dispatchEvent(new Event('change'))}
+  function syncGameType(){const cur=gm.value;gm.innerHTML=gt.value==='climb'?'<option value="coop" selected>🧗 Class climb: everyone climbs together</option><option value="race">🏁 Two-team climbing race</option>':station;if([...gm.options].some(o=>o.value===cur))gm.value=cur;gm.dispatchEvent(new Event('change'));$('#climb-energy-row')?.classList.toggle('hidden',gt.value!=='climb')}
   gt.addEventListener('change',syncGameType);
   const orig=window.settingsApply;
   if(typeof orig==='function')window.settingsApply=function(s){const mode=s?.mode,r=orig.apply(this,arguments);syncGameType();if(mode&&[...gm.options].some(o=>o.value===mode))gm.value=mode;gm.dispatchEvent(new Event('change'));return r};
