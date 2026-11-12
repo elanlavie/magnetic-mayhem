@@ -44,9 +44,22 @@ const Classes=(()=>{
   if(!box){box=document.createElement('div');box.id='account';box.className='account';document.querySelector('.header-right').prepend(box)}
   box.innerHTML=user?`<span class="who" title="${esc(user.email)}">${esc(user.name)} · ${user.role}</span><button class="quiet" id="acct-classes">${user.role==='teacher'?'🏫 Classes':'🏫 My classes'}</button><button class="quiet" id="acct-out">Sign out</button>`:'';
   if(user){box.querySelector('#acct-classes').onclick=openClasses;box.querySelector('#acct-out').onclick=signOut}
+  if(user&&user.role==='teacher'&&!box.querySelector('#acct-balance')){const b=document.createElement('button');b.className='quiet';b.id='acct-balance';b.textContent='⚖️ Balance';b.onclick=balanceView;box.querySelector('#acct-classes').after(b)}
   const teacherCard=document.getElementById('teacher');if(teacherCard)teacherCard.classList.toggle('hidden',!!user&&user.role!=='teacher');
  }
 
+ async function balanceView(){
+  const el=overlay('balance-view','<div class="eyebrow">TEACHER ONLY</div><h2>Game balance</h2><p class="muted">Loading…</p>',{wide:true});
+  try{
+   const d=await call('/api/balance'),a=d.all;
+   const mm=t=>Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+   const how={target:'crew finished the target',vote:'all imposters voted out',parity:'imposters reached parity',timer:'round timer ran out',other:'other'};
+   const row=x=>x.rounds?`<tr><td>${esc(x.label||'All rounds')}</td><td>${x.rounds}</td><td>${x.crewRate}%</td><td>${100-x.crewRate}%</td><td>${mm(x.avgSeconds)}</td><td>${x.avgTags}</td><td>${x.avgMeetings}</td></tr>`:`<tr><td>${esc(x.label)}</td><td colspan="6" class="muted">No rounds yet</td></tr>`;
+   const verdict=!a.rounds?'No finished rounds yet. Play a few with your class and come back.':a.rounds<5?`Only ${a.rounds} round${a.rounds===1?'':'s'} so far. Treat these numbers as a first look.`:a.crewRate>=65?'The crew is winning most rounds. Imposters may need more room to act (a shorter tag delay, or fewer crew tasks).':a.crewRate<=35?'The imposters are winning most rounds. The crew may need more time or a lower target.':'Wins look reasonably balanced.';
+   el.querySelector('.modal-card').innerHTML=`<button class="close" aria-label="Close">×</button><div class="eyebrow">TEACHER ONLY</div><h2>Game balance</h2><p>${esc(verdict)}</p><div class="table-wrap"><table class="balance"><thead><tr><th></th><th>Rounds</th><th>Crew wins</th><th>Imposter wins</th><th>Avg length</th><th>Avg tags</th><th>Avg meetings</th></tr></thead><tbody>${row(a)}${d.bySize.map(row).join('')}</tbody></table></div>${a.rounds?`<h3>How rounds ended</h3><p>${Object.entries(a.ended).map(([k,v])=>`${esc(how[k]||k)}: <b>${v}</b>`).join(' · ')}</p><h3>Latest rounds</h3><div class="table-wrap"><table class="balance"><thead><tr><th>When</th><th>Players</th><th>Imposters</th><th>Winner</th><th>Length</th><th>Tags</th><th>Answers</th></tr></thead><tbody>${d.recent.map(x=>`<tr><td>${fmt(x.at)}</td><td>${x.players}</td><td>${x.impostors}</td><td>${x.winner==='crew'?'Crew':'Imposters'}</td><td>${mm(x.seconds)}</td><td>${x.tags}</td><td>${x.done}/${x.target}</td></tr>`).join('')}</tbody></table></div>`:''}<p class="muted">Rounds against computer players are not counted.</p>`;
+   el.querySelector('.close').onclick=()=>el.remove();
+  }catch(e){el.querySelector('.muted').textContent=e.message}
+ }
  async function afterSignIn(){
   renderAccount();
   const code=get(JOIN);
