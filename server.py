@@ -267,7 +267,7 @@ def room_public(r):
         players.append(item)
     teams={team:sorted({i for member in r['players'].values() if member['team']==team for i in member['repairs']}) for team in ('crew','mint','violet')}
     cell_pool(r);result={'cells':list(r['cellPool']['active']),'winner':r.get('winner'),'teamRepairs':teams,'code':r['code'],'mode':r['mode'],'gameType':r.get('gameType',game_types.DEFAULT),'pack':public_pack(r['pack']),'players':players,'paused':r['paused'],'closed':r.get('closed',False),'ai':True,'tutorModel':MODEL,'autoNames':r.get('autoNames',False),'first':r['first'],'unlimited':r.get('unlimited',False),'followup':min(30,r['followup']),'created':r['created'],'allowStudy':r.get('allowStudy',False)}
-    if r.get('gameType')=='climb':result['floors']=climb_floors(r)
+    if r.get('gameType')=='climb':result['floors']=climb_floors(r);result['summit']=climb_summit(r);result['energy']=r.get('energy',70)
     if r.get('game'):result['game']=social.public(r)
     return result
 
@@ -326,10 +326,14 @@ def screen_chat(r,p,mid,category):
     if mid and category:accounts.flag_message(DB,r['classId'],mid,p['email'],p.get('realName') or p['name'],category)
 
 PASTE_MIN=100;PASTE_SHARE=.5  # pasted characters, and the share of the answer they must make up, before it is flagged
-CLIMB_W=900;CLIMB_MAX_Y=40000;CLIMB_CAP=40
+CLIMB_W=900;CLIMB_MAX_Y=40000;CLIMB_CAP=40;CLIMB_PX=300  # pixels of tower per question
 def climb_floors(r):
     """The tower has one floor per question, up to a sensible height."""
     return min(CLIMB_CAP,sum(len(t['questions']) for t in r['pack']['topics']))
+
+def climb_summit(r):
+    """How high the top of the tower is, in pixels above the start."""
+    return climb_floors(r)*CLIMB_PX
 
 def climb_done(r,p):
     """Questions that no longer need asking: for homework, the ones that earned credit; otherwise everything finished this round."""
@@ -487,6 +491,9 @@ def dispatch(path,d):
             if mode in ('infiltration','impostorSolo'):
                 r['mode']='infiltration';r['botPractice']=mode=='impostorSolo';r['soloRole']=d.get('soloRole','random')
                 social.configure(r,{**d,**({'impostors':1,'writtenDiscussion':True} if r['botPractice'] else {})})
+            if game_type=='climb':
+                try:r['energy']=max(40,min(300,int(d.get('energy') or (source or {}).get('energy') or 70)))
+                except (TypeError,ValueError):r['energy']=70
             ROOMS[code]=r; save()
             return {'code':code,'host':host}
     if path=='/api/join':
@@ -569,7 +576,9 @@ def dispatch(path,d):
                 x=float(d.get('x',p['x'])); y=float(d.get('y',p['y']))
                 if not math.isfinite(x+y): raise GameError('Invalid location.')
                 if r.get('gameType')=='climb':
-                    if 0<=x<=CLIMB_W and -CLIMB_MAX_Y<=y<=400 and math.hypot(x-p['x'],y-p['y'])<=900:p['x'],p['y']=x,y;p['lastMovementAt']=time.time()
+                    if 0<=x<=CLIMB_W and -CLIMB_MAX_Y<=y<=400 and math.hypot(x-p['x'],y-p['y'])<=900:
+                        p['x'],p['y']=x,y;p['lastMovementAt']=time.time()
+                        if r['mode']=='race' and not r.get('winner') and y<=-climb_summit(r):r['winner']=p['team']  # first team to reach the top
                     return {'ok':True,'x':p['x'],'y':p['y']}
                 dist=math.hypot(x-p['x'],y-p['y'])
                 speed_ok=not r.get('game') or dist<=520*min(1.2,max(0,time.time()-p.get('lastMovementAt',time.time()-.4)))+18
@@ -717,7 +726,6 @@ def dispatch(path,d):
                 a['done']=True
                 if r.get('assignmentId') and p.get('email') and kind=='answer' and not mcmiss and not a['repair'] and not pasteflag and result.get('safety','none') in ('none','',None):
                     p['hwNew']=qid not in accounts.hw_credited(DB,p['email'],r['assignmentId']);accounts.hw_credit(DB,p['email'],r['assignmentId'],qid)
-                if r.get('gameType')=='climb' and r['mode']=='race' and not r.get('winner') and len(p['completed'])>=climb_floors(r):r['winner']=p['team']
             if pasteflag:result['feedback']=result['feedback'][:3200]+'\n\n⚠️ This answer was pasted in, so it was flagged and will not count toward your homework. Your teacher may check in with you. Write it in your own words and try again.'
             a['messages'].append({'role':'assistant','text':result['feedback'][:3500]})
             p['cache'][rid]=True

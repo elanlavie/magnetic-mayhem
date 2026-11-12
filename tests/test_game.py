@@ -294,6 +294,17 @@ class UpgradeTests(unittest.TestCase):
         self.assertNotEqual(game.climb_pick(r,p,2),2)
         p['completed']=[f'{i}:{j}' for i,t in enumerate(r['pack']['topics']) for j in range(len(t['questions']))]
         self.assertIsNone(game.climb_pick(r,p,0))
+    def test_climb_energy_setting_and_race_is_won_by_reaching_the_top(self):
+        made=game.dispatch('/api/create',{'mode':'race','gameType':'climb','energy':110,'pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
+        r=game.ROOMS[made['code']];pub=game.room_public(r)
+        self.assertEqual((pub['energy'],pub['summit']),(110,game.climb_floors(r)*game.CLIMB_PX))
+        low=game.dispatch('/api/create',{'mode':'coop','gameType':'climb','energy':1,'pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
+        self.assertEqual(game.ROOMS[low['code']]['energy'],40)
+        joined=game.dispatch('/api/join',{'code':made['code'],'name':'Sam'});auth={'code':made['code'],'token':joined['token']}
+        _,p=game.get(auth);top=game.climb_summit(r)
+        p['x'],p['y']=450,-top+300  # climbing is checked in small steps, so start near the top
+        game.dispatch('/api/move',{**auth,'x':450,'y':-top+40});self.assertIsNone(r.get('winner'))
+        game.dispatch('/api/move',{**auth,'x':450,'y':-top-10});self.assertEqual(r.get('winner'),p['team'])
     def test_old_rooms_load_as_station_and_study_rooms_inherit_type(self):
         r=game.ROOMS[self.auth['code']];r.pop('gameType');game.save();game.ROOMS.clear();game.load()
         self.assertEqual(game.ROOMS[self.auth['code']]['gameType'],'station')
