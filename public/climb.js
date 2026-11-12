@@ -69,7 +69,7 @@ function drawClimb(ts,dt,paused){
   const gx=ledgeCX(h),atGate=h<floors&&Math.abs(pos.x-gx)<46&&CLIMB.ground&&Math.abs(pos.y+CLIMB.HALF-ledgeY(h))<4;
   CLIMB.zone=atGate?1:0;
   if(!paused&&atGate&&ts>CLIMB.cool&&!CLIMB.stand)CLIMB.stand=ts;if(!atGate)CLIMB.stand=0;
-  if(!paused&&atGate&&CLIMB.stand&&ts-CLIMB.stand>650&&ts>CLIMB.cool){CLIMB.stand=0;climbEnter()}
+  if(!paused&&atGate&&CLIMB.stand&&ts>CLIMB.cool&&false){CLIMB.stand=0}
   if(h>=floors&&!CLIMB.celebrated&&Math.abs(pos.y+CLIMB.HALF-ledgeY(h))<4){CLIMB.celebrated=true;if(typeof celebrate==='function')celebrate(1)}
   // camera
   const rect=canvas.getBoundingClientRect(),dpr=Math.min(devicePixelRatio||1,2);
