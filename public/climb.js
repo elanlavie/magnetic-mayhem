@@ -1,5 +1,5 @@
-// Tower climb: an energy platformer. Moving and jumping burn energy; a good explanation to the tutor refills it.
-// Uses the same tutor chat, timers, saved games and review as the station game (see server.py climb_pick).
+// Tower climb: an energy platformer. Moving and jumping burn energy; a correct answer refills it.
+// Uses the same questions, timers, saved games and review as the station game (see server.py climb_pick).
 const CLIMB={W:900,G:2100,JUMP:800,JUMP2:700,SPEED:300,HALF:22,JCOST:8,WCOST:4,vx:0,vy:0,ground:false,coyote:0,buf:0,dj:1,jumpPrev:false,room:'',h:-1,energy:0,cp:0,zoneSeen:0,best:0,tower:null,wasActive:false,moveAt:0,hudAt:0,hurt:0,celebrated:false,flash:0,rings:[]};
 const ZONES=[
   {name:'Meadow Base',top:[205,60,62],bot:[190,55,78],plat:'#58b368',edge:'#a8e6a3'},
@@ -8,8 +8,9 @@ const ZONES=[
   {name:'Star Summit',top:[265,45,10],bot:[255,45,24],plat:'#d8a93e',edge:'#ffe9a8'}
 ];
 const climbOn=()=>state?.room?.gameType==='climb';
-const climbFloors=()=>Math.max(1,state.room.floors||state.room.pack.topics.reduce((n,t)=>n+t.questions.length,0));
+const climbFloors=()=>Math.max(1,state.room.floors||state.room.pack.topics.reduce((n,t)=>n+(t.count??t.questions?.length??0),0));
 const climbHeight=()=>Math.min(climbFloors(),state.player.completed.length);
+const climbRight=()=>state.player.rightN??state.player.completed.length;
 const climbSummit=()=>state.room.summit||climbFloors()*300;
 const climbEnergyPer=()=>state.room.energy||70;
 const metersOf=y=>Math.max(0,Math.round(-y/10));
@@ -49,33 +50,33 @@ function climbHud(){
   const swap=(id,station,tower)=>{const e=document.getElementById(id);if(e)e.innerHTML=climb?tower:station};
   swap('side-eyebrow','STATION STATUS','TOWER PROGRESS');swap('side-title','Bring it back<br>to life.','Climb to<br>the top.');
   swap('side-face','🧑‍🔧','🧗');swap('side-card-title','🛠️ Ship engineer','🧗 Tower guide');
-  swap('side-card-text','Run supplies 📦, collect energy ⚡, and repair the station 🔧. Chat whenever you want; leave whenever you want.','Moving and jumping use energy. Answer a question any time and explain your thinking to refill it, then keep climbing.');
+  swap('side-card-text','Run supplies 📦, collect energy ⚡, and repair the station 🔧. Answer whenever you want; leave whenever you want.','Moving and jumping use energy. Answer a question any time and explain your thinking to refill it, then keep climbing.');
   const rh=document.querySelector('.rooms-strip h3');if(rh)rh.textContent=climb?'📚 Topics':'🚪 Your rooms';
   $('#boost-meter')?.classList.toggle('hidden',climb);$('#objectivesbtn')?.classList.toggle('hidden',climb);
   if(!climb)return;
   const h=climbHeight(),floors=climbFloors();
   $('#mission-label').textContent=r.mode==='solo'?'SOLO CLIMB':`${r.mode==='race'?p.team.toUpperCase()+' TEAM RACE':'TOWER CLIMB'} · ${r.code}`;
-  $('#station-list').innerHTML=r.pack.topics.map((t,i)=>{const done=p.completed.filter(x=>x.startsWith(i+':')).length,n=t.questions.length;return `<div class="station-entry ${done>=n?'complete':''}" style="--rc:${roomColor(i)}"><span class="indicator">${done>=n?'✓':i+1}</span><span>${esc(t.name)}</span><small>${done}/${n}</small></div>`}).join('');
+  $('#station-list').innerHTML=r.pack.topics.map((t,i)=>{const done=p.completed.filter(x=>x.startsWith(i+':')).length,n=t.count??t.questions?.length??0;return `<div class="station-entry ${done>=n?'complete':''}" style="--rc:${roomColor(i)}"><span class="indicator">${done>=n?'✓':i+1}</span><span>${esc(t.name)}</span><small>${done}/${n}</small></div>`}).join('');
   climbMini();
 }
 function climbRules(){
   const per=climbEnergyPer();
-  modal(`<div class="rules"><div class="eyebrow">TOWER CLIMB</div><h2>Climb as high as you can.</h2><ul><li>Move with <b>← →</b>. Jump with <b>↑</b> or <b>Space</b>, and press jump again in the air for a <b>double jump</b>. On a touch screen use the on-screen buttons.</li><li>Moving and jumping use up your <b>⚡ energy</b>. Standing still is free.</li><li>Out of energy? Press <b>Enter</b> any time to answer a question. Explain your thinking, and a good explanation refills your energy.</li><li>Watch for spiky orbs. If one touches you, you go back to the last checkpoint floor.</li><li>${state.room.mode==='race'?'The first team to reach the top wins.':'See how high your class can get together.'}</li></ul><button class="primary" onclick="closeModal()">Start climbing</button></div>`);
+  modal(`<div class="rules"><div class="eyebrow">TOWER CLIMB</div><h2>Climb as high as you can.</h2><ul><li>Move with <b>← →</b>. Jump with <b>↑</b> or <b>Space</b>, and press jump again in the air for a <b>double jump</b>. On a touch screen use the on-screen buttons.</li><li>Moving and jumping use up your <b>⚡ energy</b>. Standing still is free.</li><li>Out of energy? Press <b>Enter</b> any time to answer a question. A correct answer refills your energy.</li><li>Watch for spiky orbs. If one touches you, you go back to the last checkpoint floor.</li><li>${state.room.mode==='race'?'The first team to reach the top wins.':'See how high your class can get together.'}</li></ul><button class="primary" onclick="closeModal()">Start climbing</button></div>`);
 }
 async function climbEnter(){
   if(!state||state.player.active)return;
   if(climbHeight()>=climbFloors())return toast('🏆 You answered everything. Your energy never runs out, so go for the top!');
   keys.clear();
-  try{const epoch=++encounterEpoch;reqId=null;const data=await api('/api/start',auth({topic:climbHeight()%state.room.pack.topics.length}));if(epoch===encounterEpoch){state=data;syncEncounter(true);$('#answer').focus()}}catch(e){toast(e.message)}
+  try{const epoch=++encounterEpoch;reqId=null;const data=await api('/api/start',auth({topic:climbHeight()%state.room.pack.topics.length}));if(epoch===encounterEpoch){state=data;syncEncounter(true)}}catch(e){toast(e.message)}
 }
 function drawClimb(ts,dt,paused){
   const r=state.room,p=state.player,h=climbHeight(),floors=climbFloors(),summit=climbSummit(),per=climbEnergyPer(),maxE=per*3;
   dt=Math.min(dt,.05);
   if(CLIMB.room!==r.code||!CLIMB.tower||CLIMB.tower.summit!==summit){
-    CLIMB.room=r.code;CLIMB.tower=buildTower(r.code,summit);CLIMB.h=h;CLIMB.cp=0;CLIMB.zoneSeen=0;CLIMB.celebrated=false;climbLoadEnergy(h);
+    CLIMB.room=r.code;CLIMB.tower=buildTower(r.code,summit);CLIMB.h=h;CLIMB.rt=climbRight();CLIMB.cp=0;CLIMB.zoneSeen=0;CLIMB.celebrated=false;climbLoadEnergy(h);
     if(typeof p.y==='number'&&p.y<-5&&p.y>-summit-200){pos.x=p.x;pos.y=p.y;CLIMB.vx=CLIMB.vy=0;CLIMB.ground=false;const z=Math.min(3,Math.floor(4*-(p.y+CLIMB.HALF)/summit));CLIMB.cp=z;CLIMB.zoneSeen=z}else climbRespawn();
     CLIMB.best=Math.max(CLIMB.best,metersOf(pos.y+CLIMB.HALF));climbHud()}
-  if(h>CLIMB.h){const gain=(h-CLIMB.h)*per;CLIMB.energy=Math.min(maxE,CLIMB.energy+gain);CLIMB.flash=ts+900;toast(h>=floors?'🏆 You answered everything! Unlimited energy. Go for the top!':`⚡ +${gain} energy! Keep climbing.`);CLIMB.h=h;climbSaveEnergy();climbHud()}
+  if(h>CLIMB.h){const rt=climbRight(),gain=Math.max(0,rt-(CLIMB.rt??rt))*per;CLIMB.energy=Math.min(maxE,CLIMB.energy+gain);CLIMB.flash=ts+900;toast(h>=floors?'🏆 You answered everything! Unlimited energy. Go for the top!':gain?`⚡ +${gain} energy! Keep climbing.`:'Not this time. Check the answer, then keep climbing!');CLIMB.h=h;CLIMB.rt=rt;climbSaveEnergy();climbHud()}
   if(p.active)CLIMB.wasActive=true;else if(CLIMB.wasActive){CLIMB.wasActive=false}
   const T=CLIMB.tower,plats=T.plats,free=h>=floors;
   if(free)CLIMB.energy=maxE;

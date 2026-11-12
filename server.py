@@ -71,7 +71,6 @@ def load():
         for code,data in db.execute('select code,data from rooms'):
             r=json.loads(data)
             if time.time()-r['created']<7*86400:
-                r['ai']=True
                 r.setdefault('gameType',game_types.DEFAULT)
                 r['followup']=min(30,r.get('followup',30))
                 for p in r['players'].values():
@@ -484,7 +483,7 @@ def dispatch(path,d):
             answer_mode(r['pack'],q);perm=list(range(len(q['choices'])));secrets.SystemRandom().shuffle(perm)  # a fresh answer order every time
             p['active']={'id':secrets.token_hex(8),'topic':topic,'index':qi,'vi':vi,'prompt':q['prompt'],'choices':[q['choices'][i] for i in perm],'perm':perm,'mode':'mc','image':q.get('image') or '','think':think_seconds(q,'mc'),'messages':[{'role':'assistant','text':q['prompt']}],'attempts':0,'repair':False,'done':False,'busy':False,'practice':practice}
             p['hwNew']=False;save(); return snapshot(r,p)
-        if path in ('/api/relay','/api/repair') and r.get('game'):raise GameError('In imposter mode, complete your assigned tutor conversations to advance the crew task bar.')
+        if path in ('/api/relay','/api/repair') and r.get('game'):raise GameError('In imposter mode, answer your assigned questions to advance the crew task bar.')
         if path=='/api/relay':
             records=p.setdefault('relayRecords',{})
             if d.get('action')=='start':
@@ -554,6 +553,7 @@ def dispatch(path,d):
         with LOCK:
             a['messages'].append({'role':'user','text':text})
             miss=not ok
+            if ok:p['rightN']=p.get('rightN',0)+1
             if miss: a['attempts']+=1;a['repair']=True  # one shot at a question: explain it, award nothing
             points=0 if miss else 1
             a['points']=points;a['celebrate']=points>0

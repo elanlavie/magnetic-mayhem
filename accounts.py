@@ -312,7 +312,7 @@ def clean_nickname(text):
 
 
 def guess_nickname(full_name):
-    """Fallback guess: the given name. The teacher (or the AI suggestion) can improve it."""
+    """Fallback guess: the given name. The teacher can edit it."""
     first = (str(full_name or '').split() or [''])[0]
     first = clean_nickname(first)
     return first.title() if first.isupper() or first.islower() else first
@@ -399,7 +399,7 @@ PROFANITY = re.compile(r"\b(fuck\w*|shit\w*|bitch\w*|asshole|cunt)\b", re.I)
 
 
 def screen(text):
-    """Cheap local backstop. The tutor model also classifies each message in context."""
+    """Cheap local backstop for free text."""
     text = str(text or '')
     if SELF_HARM.search(text):
         return 'self_harm'

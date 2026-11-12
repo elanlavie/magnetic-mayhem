@@ -18,7 +18,7 @@ const Homework=(function(){
  // ---------------- students
  async function studentView(){
   let list=[];try{list=(await api('/api/hw/list',{})).assignments}catch(e){return toast(e.message)}
-  const el=overlay(`<div class="eyebrow">HOMEWORK</div><h2>${list.length?'Your assignments':'No homework yet.'}</h2>${list.map(a=>`<div class="hw-card"><div class="hw-top"><strong>${esc(a.title)}</strong><span class="muted">${esc(a.className)} · due ${esc(fmt(a.due))}</span></div><div class="hw-row">${bar(a.done,a.total)}<b>${a.done} / ${a.total}</b><span class="muted">${a.percent}%</span></div>${a.done>=a.total?'<p class="hw-done">🎉 All questions complete. Nice work!</p>':`<p class="muted">A question counts when you explain it well. You can retry as many times as you like, and each try can show a fresh version.</p><div class="toolbar"><button class="primary small" data-start="${esc(a.id)}" data-type="chat">💬 Chat with the tutor</button><button class="small" data-start="${esc(a.id)}" data-type="climb">🧗 Tower climb</button><button class="small" data-start="${esc(a.id)}" data-type="station">🕵️ Imposter practice</button></div>`}</div>`).join('')||'<p>Your teacher has not assigned anything yet.</p>'}`);
+  const el=overlay(`<div class="eyebrow">HOMEWORK</div><h2>${list.length?'Your assignments':'No homework yet.'}</h2>${list.map(a=>`<div class="hw-card"><div class="hw-top"><strong>${esc(a.title)}</strong><span class="muted">${esc(a.className)} · due ${esc(fmt(a.due))}</span></div><div class="hw-row">${bar(a.done,a.total)}<b>${a.done} / ${a.total}</b><span class="muted">${a.percent}%</span></div>${a.done>=a.total?'<p class="hw-done">🎉 All questions complete. Nice work!</p>':`<p class="muted">A question counts when you get it right. You can try again as many times as you like, and each try can show a fresh version.</p><div class="toolbar"><button class="primary small" data-start="${esc(a.id)}" data-type="chat">📘 Start the quiz</button><button class="small" data-start="${esc(a.id)}" data-type="climb">🧗 Tower climb</button><button class="small" data-start="${esc(a.id)}" data-type="station">🕵️ Imposter practice</button></div>`}</div>`).join('')||'<p>Your teacher has not assigned anything yet.</p>'}`);
   el.querySelectorAll('[data-start]').forEach(b=>b.onclick=()=>begin(b.dataset.start,b.dataset.type,b));
  }
  async function begin(assignmentId,gameType,btn){
@@ -55,7 +55,7 @@ const Homework=(function(){
  }
  async function report(id){
   let r;try{r=await api('/api/hw/report',{id})}catch(e){return toast(e.message)}
-  const el=overlay(`<button class="back" id="hw-back">← Assignments</button><div class="eyebrow">${esc(fmt(r.due))}</div><h2>${esc(r.title)}</h2><p class="muted">${r.total} questions. A question counts once the student explains it well; they can retry as often as they like.</p>
+  const el=overlay(`<button class="back" id="hw-back">← Assignments</button><div class="eyebrow">${esc(fmt(r.due))}</div><h2>${esc(r.title)}</h2><p class="muted">${r.total} questions. A question counts once the student answers it correctly; they can retry as often as they like.</p>
    <div class="roster-table">${r.students.map(s=>`<div class="rrow hw-student"><div><strong>${esc(s.name)}</strong><div class="muted">${esc(s.email)}</div></div><div class="hw-row">${bar(s.done,r.total)}<b>${s.done} / ${r.total}</b><span class="muted">${s.percent}%</span></div><span class="muted">${s.adjust?`adjusted ${s.adjust>0?'+':''}${s.adjust}${s.note?' · '+esc(s.note):''}<br>`:''}${s.pasted?`<b class="flag">⚠️ ${s.pasted} pasted answer${s.pasted>1?'s':''}</b><br>`:''}${s.last?'last credit '+esc(fmt(s.last)):'nothing yet'}</span><span class="toolbar"><button class="small" data-chats="${esc(s.email)}" data-name="${esc(s.name)}">💬 Chats</button><button class="small" data-adjust="${esc(s.email)}" data-name="${esc(s.name)}" data-cur="${s.adjust}">± Adjust</button></span></div>`).join('')||'<p>No students in this class yet.</p>'}</div>`);
   el.querySelector('#hw-back').onclick=teacherView;
   el.querySelectorAll('[data-chats]').forEach(b=>b.onclick=()=>{document.getElementById('hw-view')?.remove();Classes.transcript(r.classId,b.dataset.chats,b.dataset.name)});
@@ -68,7 +68,7 @@ const Homework=(function(){
  // ---------------- the plain chat screen
  async function nextQuestion(){
   const btn=document.getElementById('hw-next');if(btn)btn.disabled=true;
-  try{const epoch=++encounterEpoch;reqId=null;const data=await api('/api/start',auth({}));if(epoch===encounterEpoch){state=data;syncEncounter(true);$('#answer').focus()}}catch(e){toast(e.message)}finally{if(btn)btn.disabled=false}
+  try{const epoch=++encounterEpoch;reqId=null;const data=await api('/api/start',auth({}));if(epoch===encounterEpoch){state=data;syncEncounter(true);}}catch(e){toast(e.message)}finally{if(btn)btn.disabled=false}
  }
  let lastDone=-1;
  function chatScreen(){
@@ -83,10 +83,10 @@ const Homework=(function(){
   let panel=document.getElementById('hw-panel');
   if(!panel){panel=document.createElement('section');panel.id='hw-panel';panel.className='panel hw-panel';document.querySelector('#game .game-bar').after(panel)}
   const finished=hw.total&&hw.done>=hw.total;
-  const html=`<div class="eyebrow">HOMEWORK</div><h2>${esc(hw.title)}</h2><div class="hw-row">${bar(hw.done,hw.total)}<b>${hw.done} / ${hw.total}</b><span class="muted">questions with credit</span></div>${finished?'<p class="hw-done">🎉 Every question has credit. You are finished with this assignment!</p>':`<p class="muted">Explain your thinking and the tutor will help you get there. A question counts when you give a solid explanation. If it does not count yet, just try again. You will see a fresh version.</p><button id="hw-next" class="primary wide">${hw.done?'Next question':'Start'} →</button>`}`;
+  const html=`<div class="eyebrow">HOMEWORK</div><h2>${esc(hw.title)}</h2><div class="hw-row">${bar(hw.done,hw.total)}<b>${hw.done} / ${hw.total}</b><span class="muted">questions with credit</span></div>${finished?'<p class="hw-done">🎉 Every question has credit. You are finished with this assignment!</p>':`<p class="muted">Answer each question. A question counts when you give a solid explanation. If it does not count yet, just try again. You will see a fresh version.</p><button id="hw-next" class="primary wide">${hw.done?'Next question':'Start'} →</button>`}`;
   if(panel.dataset.sig!==html){panel.dataset.sig=html;panel.innerHTML=html;const b=panel.querySelector('#hw-next');if(b)b.onclick=nextQuestion}
-  const ml=document.getElementById('mission-label');if(ml)ml.textContent='HOMEWORK CHAT';
-  const t=document.getElementById('encounter-title');if(t)t.textContent='🧑‍🏫 Your tutor';
+  const ml=document.getElementById('mission-label');if(ml)ml.textContent='HOMEWORK QUIZ';
+  const t=document.getElementById('encounter-title');if(t)t.textContent='📘 Question';
   const c=document.getElementById('closechat');if(c)c.textContent='✕ Back';
  }
  return {open,chatScreen};

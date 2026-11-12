@@ -14,19 +14,17 @@
  function summary(){
   const box=$('#launch-summary');if(!box)return;
   let n=0;try{n=(pack&&pack.topics&&pack.topics.length)||0}catch{}
-  const mc=$('#fmt-mc')&&$('#fmt-mc').checked,fr=$('#fmt-free')&&$('#fmt-free').checked;
-  const how=mc&&fr?'multiple choice, then a written explanation':mc?'multiple choice':'written answers';
   const parts=[];
   parts.push('<b>'+esc($('#packtitle').value.trim()||'Your game')+'</b>');
   parts.push(esc(txt('#gamemode')||'Game'));
-  parts.push(n?n+' question'+(n===1?'':'s')+' each, '+how:'');
+  parts.push(n?n+' room'+(n===1?'':'s')+' of multiple-choice questions':'');
   parts.push($('#unlimited')&&$('#unlimited').checked?'no time limit':'timed answers');
   if($('#gamemode').value==='infiltration'){
    const m=Number($('#meeting-minutes').value);parts.push(m?'meetings about every '+m+' min':'no automatic meetings');
    if($('#round-timer-on').checked)parts.push($('#round-minutes').value+' minute round');
   }
   const cp=$('#classpick');if(cp&&cp.selectedOptions[0])parts.push('for '+esc(cp.selectedOptions[0].textContent.trim()));
-  box.innerHTML=parts.filter(Boolean).join(' · ')+(n?'':'<br><span class="warn">No questions yet. Go back to step 2 and press “Create questions”.</span>');
+  box.innerHTML=parts.filter(Boolean).join(' · ')+(n?'':'<br><span class="warn">No questions yet. Go back to step 1 and press “Add these questions”.</span>');
   box.classList.toggle('bad',!n);
  }
  function esc(t){return String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
@@ -50,5 +48,5 @@
   if(typeof orig==='function')window.settingsApply=function(s){const mode=s?.mode,r=orig.apply(this,arguments);syncGameType();if(mode&&[...gm.options].some(o=>o.value===mode))gm.value=mode;gm.dispatchEvent(new Event('change'));return r};
 })();
 
-// After the questions are created, move on to review them.
+// After the questions are added, move on to review them.
 (function(){const g=document.getElementById('generate');if(!g)return;let was=false;new MutationObserver(()=>{const busy=g.disabled;if(was&&!busy&&(typeof pack!=='undefined'&&pack?.topics?.length)&&!document.querySelector('#generate-note')?.textContent.match(/couldn|error|failed/i))document.getElementById('wiz-next-1')?.click();was=busy}).observe(g,{attributes:true,attributeFilter:['disabled']})})();
