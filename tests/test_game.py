@@ -277,6 +277,10 @@ class UpgradeTests(unittest.TestCase):
     def test_unavailable_or_unknown_game_type_is_rejected(self):
         with self.assertRaises(game.GameError):game.dispatch('/api/create',{'mode':'coop','gameType':'nonsense','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
         with self.assertRaises(game.GameError):game.dispatch('/api/create',{'mode':'infiltration','gameType':'climb','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
+    def test_solo_practice_from_a_climb_study_code_stays_a_climb(self):
+        made=game.dispatch('/api/create',{'mode':'coop','gameType':'climb','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test','allowStudy':True})
+        solo=game.dispatch('/api/create',{'mode':'impostorSolo','source':made['code']})
+        r=game.ROOMS[solo['code']];self.assertEqual((r['gameType'],r['mode']),('climb','solo'))
     def test_climb_picks_unanswered_questions_and_moves_freely(self):
         made=game.dispatch('/api/create',{'mode':'coop','gameType':'climb','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
         joined=game.dispatch('/api/join',{'code':made['code'],'name':'Sam'});auth={'code':made['code'],'token':joined['token']}

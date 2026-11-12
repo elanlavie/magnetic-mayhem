@@ -428,8 +428,6 @@ def dispatch(path,d):
         mode=d.get('mode','coop')
         if mode not in ('solo','coop','race','infiltration','impostorSolo'):raise GameError('Unknown game mode.')
         game_type=str(d.get('gameType') or game_types.DEFAULT)
-        problem=game_types.check(game_type,mode)
-        if problem:raise GameError(problem)
         class_id=owner=None;saved_pack=None
         if accounts.enabled():
             user=accounts.user_for(DB,d)
@@ -446,6 +444,12 @@ def dispatch(path,d):
             if user['role']!='teacher' and not source and not saved_pack:raise GameError('Ask your teacher for a study code to practice on your own.')
             if not d.get('pack'):raise GameError('Add your questions before creating a game.')
         elif mode not in ('solo','impostorSolo'): teacher(d)
+        if saved_pack and not source and not d.get('gameType'):
+            saved_type=str((saved_pack.get('settings') or {}).get('gameType') or '')
+            if saved_type in game_types.GAME_TYPES:game_type=saved_type
+        if game_type=='climb' and mode=='impostorSolo':mode='solo';d={**d,'mode':'solo'}  # no practice-bot version of the tower
+        problem=game_types.check(game_type,mode)
+        if problem:raise GameError(problem)
         pack=validate_pack(copy.deepcopy(d.get('pack') or BUILTIN));pack.pop('settings',None)  # saved-game settings are for the teacher's list, not for students
         if d.get('tasksPerCrew'):
             try: pack['topics']=pack['topics'][:max(1,min(7,int(d['tasksPerCrew'])))]
