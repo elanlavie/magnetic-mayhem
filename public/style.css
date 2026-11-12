@@ -336,3 +336,8 @@ body.in-game #game{padding-top:8px;padding-bottom:8px}
 #game .mission-side .round-actions button{width:100%}
 #game .mission-side .lock-pick{flex-direction:row;align-items:stretch}#game .mission-side .lock-pick select{width:40%;flex:none;padding:6px}#game .mission-side .lock-pick button{flex:1;font-size:12px;padding:6px 8px}
 table.balance{width:100%;border-collapse:collapse;font-size:13px}table.balance th,table.balance td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}.table-wrap{overflow-x:auto}
+
+/* Tower climb */
+.viewport.climb .interact{top:48px;bottom:auto;left:50%;transform:translateX(-50%);padding:6px 10px;gap:8px}
+.viewport.climb .interact .primary{padding:6px 14px;font-size:14px}
+@media(pointer:coarse){.viewport.climb .interact{top:48px;right:auto;left:50%;transform:translateX(-50%);flex-direction:row}}

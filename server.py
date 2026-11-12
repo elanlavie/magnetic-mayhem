@@ -266,6 +266,7 @@ def room_public(r):
         players.append(item)
     teams={team:sorted({i for member in r['players'].values() if member['team']==team for i in member['repairs']}) for team in ('crew','mint','violet')}
     cell_pool(r);result={'cells':list(r['cellPool']['active']),'winner':r.get('winner'),'teamRepairs':teams,'code':r['code'],'mode':r['mode'],'gameType':r.get('gameType',game_types.DEFAULT),'pack':public_pack(r['pack']),'players':players,'paused':r['paused'],'closed':r.get('closed',False),'ai':True,'tutorModel':MODEL,'autoNames':r.get('autoNames',False),'first':r['first'],'unlimited':r.get('unlimited',False),'followup':min(30,r['followup']),'created':r['created'],'allowStudy':r.get('allowStudy',False)}
+    if r.get('gameType')=='climb':result['floors']=climb_floors(r)
     if r.get('game'):result['game']=social.public(r)
     return result
 
@@ -322,6 +323,18 @@ def log_chat(r,p,a,role,text):
 
 def screen_chat(r,p,mid,category):
     if mid and category:accounts.flag_message(DB,r['classId'],mid,p['email'],p.get('realName') or p['name'],category)
+
+CLIMB_W=900;CLIMB_MAX_Y=40000;CLIMB_CAP=40
+def climb_floors(r):
+    """The tower has one floor per question, up to a sensible height."""
+    return min(CLIMB_CAP,sum(len(t['questions']) for t in r['pack']['topics']))
+
+def climb_pick(r,p,topic):
+    """Use the gate's topic if it still has unanswered questions, otherwise any topic that does."""
+    topics=r['pack']['topics'];order=[topic]+[i for i in range(len(topics)) if i!=topic] if 0<=topic<len(topics) else list(range(len(topics)))
+    for i in order:
+        if any(f'{i}:{j}' not in p['completed'] for j in range(len(topics[i]['questions']))):return i
+    return None
 
 def snapshot(r,p): return {'room':room_public(r),'player':{**private_player(p),**social.private(r,p)}}
 
@@ -527,6 +540,9 @@ def dispatch(path,d):
             if not p['active']:
                 x=float(d.get('x',p['x'])); y=float(d.get('y',p['y']))
                 if not math.isfinite(x+y): raise GameError('Invalid location.')
+                if r.get('gameType')=='climb':
+                    if 0<=x<=CLIMB_W and -CLIMB_MAX_Y<=y<=400 and math.hypot(x-p['x'],y-p['y'])<=900:p['x'],p['y']=x,y;p['lastMovementAt']=time.time()
+                    return {'ok':True,'x':p['x'],'y':p['y']}
                 dist=math.hypot(x-p['x'],y-p['y'])
                 speed_ok=not r.get('game') or dist<=520*min(1.2,max(0,time.time()-p.get('lastMovementAt',time.time()-.4)))+18
                 if speed_ok and dist<=180 and 25<=x<=1575 and 25<=y<=1125 and not any(a-14<x<a+w+14 and b-14<y<b+h+14 for a,b,w,h in WALLS): p['x'],p['y']=x,y;p['lastMovementAt']=time.time();(p['stats'].__setitem__('distance',p['stats']['distance']+dist) if r.get('game') and p.get('stats') and r['game']['phase']=='playing' else None)
@@ -535,7 +551,10 @@ def dispatch(path,d):
             if p['active']: return snapshot(r,p)
             topic=int(d.get('topic',-1))
             if not 0<=topic<len(r['pack']['topics']): raise GameError('Unknown station.')
-            if math.dist([p['x'],p['y']],POSITIONS[topic])>125: raise GameError('Move closer to the station to interact.')
+            if r.get('gameType')=='climb':
+                topic=climb_pick(r,p,topic)
+                if topic is None: raise GameError('You reached the summit! Every question is done.')
+            elif math.dist([p['x'],p['y']],POSITIONS[topic])>125: raise GameError('Move closer to the station to interact.')
             if r.get('game') and str(topic) in r['game'].get('locks',{}): raise GameError('This room is locked for a moment. Visit another room, or press Interact to unlock it if you are not in a chat.')
             if r.get('game') and p.get('blockedTopic')==topic and time.time()<p.get('blockedUntil',0): raise GameError('Visit a different station first, then come back.')
             if p.get('blockedTopic')!=topic: p['blockedTopic']=None
@@ -544,6 +563,8 @@ def dispatch(path,d):
                 p['active']=p['conversations'].pop(str(topic)); save(); return snapshot(r,p)
             t=r['pack']['topics'][topic]
             qi=social.next_question(r,p,topic) if r.get('game') else None
+            if r.get('gameType')=='climb':
+                left=[i for i in range(len(t['questions'])) if f'{topic}:{i}' not in p['completed']];qi=secrets.choice(left)
             if qi is None:qi=None if any(x.startswith(f'{topic}:') for x in p['completed']) else secrets.randbelow(len(t['questions']))
             practice=qi is None
             if qi is None: qi=secrets.randbelow(len(t['questions']))
@@ -657,6 +678,7 @@ def dispatch(path,d):
                     social.conversation_completed(r,p,qid);social.record_task(r,p,qid)
                     if kind=='answer' and not local and not mcmiss and not a['repair'] and result.get('safety','none') in ('none','',None):social.note_explanation(r,p,a['topic'],q['prompt'],text.split('My reasoning: ',1)[-1])
                 a['done']=True
+                if r.get('gameType')=='climb' and r['mode']=='race' and not r.get('winner') and len(p['completed'])>=climb_floors(r):r['winner']=p['team']
             a['messages'].append({'role':'assistant','text':result['feedback'][:3500]})
             p['cache'][rid]=True
             if len(p['cache'])>120: p['cache'].pop(next(iter(p['cache'])))
