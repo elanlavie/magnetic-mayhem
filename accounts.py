@@ -21,7 +21,8 @@ import time
 from contextlib import contextmanager
 from email.message import EmailMessage
 from urllib.parse import quote
-from urllib.request import urlopen
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 
 class AuthError(Exception):
@@ -459,28 +460,41 @@ def _set_status(db, alert_id, status, detail=''):
         c.execute('update alerts set status=?, detail=? where id=?', (status, detail[:300], alert_id))
 
 
-def send_alert(db, alert_id):
-    """Send the alert email and record an honest delivery status."""
-    with tx(db) as c:
-        row = c.execute('select a.*, c.name as class_name from alerts a join classes c on c.id=a.class_id where a.id=?', (alert_id,)).fetchone()
-    if not row:
-        return
+def mail_configured():
+    return bool(os.environ.get('RESEND_API_KEY') or os.environ.get('SMTP_HOST'))
+
+
+def send_mail(to, subject, body):
+    """Send one plain-text email. Returns (ok, detail). Uses Resend over HTTPS when RESEND_API_KEY is set (works on hosts that block
+    SMTP ports), otherwise SMTP. Credentials never appear in the returned detail."""
+    sender = os.environ.get('ALERT_FROM') or os.environ.get('SMTP_USER', '')
+    key = os.environ.get('RESEND_API_KEY', '')
+    if key:
+        if not sender:
+            return False, 'Set ALERT_FROM to an address on your verified sending domain.'
+        req = Request('https://api.resend.com/emails', method='POST',
+                      data=json.dumps({'from': sender, 'to': [to], 'subject': subject, 'text': body}).encode(),
+                      headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json', 'User-Agent': 'imposter-classroom/1.0'})
+        try:
+            with urlopen(req, timeout=20):
+                pass
+            return True, f'Emailed {to}'
+        except HTTPError as exc:
+            try:
+                why = json.loads(exc.read().decode()).get('message', '')
+            except Exception:
+                why = ''
+            return False, f'The email service refused it ({exc.code}). {why}'[:300]
+        except Exception as exc:
+            return False, f'{type(exc).__name__}: could not reach the email service.'
     host = os.environ.get('SMTP_HOST', '')
     if not host:
-        _set_status(db, alert_id, 'not_configured', 'Email is not set up on this server. The alert is still in your dashboard.')
-        return
-    link = f'{PUBLIC_URL}/?alert={alert_id}' if PUBLIC_URL else None
+        return False, 'not_configured'
     msg = EmailMessage()
-    msg['Subject'] = f'Imposter safety alert: {row["class_name"]}'
-    msg['From'] = os.environ.get('ALERT_FROM') or os.environ.get('SMTP_USER', '')
-    msg['To'] = row['teacher']
-    msg.set_content(
-        f'{CATEGORIES[row["category"]]} in your class "{row["class_name"]}".\n\n'
-        f'Student: {row["student_name"]} ({row["student_email"]})\n\n'
-        + (f'Review the conversation (sign in with your teacher account):\n{link}\n' if link else
-           'Sign in to the Imposter class dashboard to review the conversation.\n')
-        + '\nThis automated check can be wrong. Please read the conversation before acting. '
-          'The message text is not included in this email to protect student privacy.\n')
+    msg['Subject'] = subject
+    msg['From'] = sender
+    msg['To'] = to
+    msg.set_content(body)
     try:
         port = int(os.environ.get('SMTP_PORT', '587'))
         if port == 465:
@@ -492,9 +506,39 @@ def send_alert(db, alert_id):
             if os.environ.get('SMTP_USER'):
                 server.login(os.environ['SMTP_USER'], os.environ.get('SMTP_PASSWORD', ''))
             server.send_message(msg)
-        _set_status(db, alert_id, 'sent', f'Emailed {row["teacher"]}')
+        return True, f'Emailed {to}'
     except Exception as exc:  # never include credentials in the stored detail
-        _set_status(db, alert_id, 'failed', f'{type(exc).__name__}: email could not be sent. Check the SMTP settings.')
+        return False, f'{type(exc).__name__}: email could not be sent. Check the mail settings (some hosts block SMTP; try RESEND_API_KEY).'
+
+
+def send_alert(db, alert_id):
+    """Send the alert email and record an honest delivery status."""
+    with tx(db) as c:
+        row = c.execute('select a.*, c.name as class_name from alerts a join classes c on c.id=a.class_id where a.id=?', (alert_id,)).fetchone()
+    if not row:
+        return
+    if not mail_configured():
+        _set_status(db, alert_id, 'not_configured', 'Email is not set up on this server. The alert is still in your dashboard.')
+        return
+    link = f'{PUBLIC_URL}/?alert={alert_id}' if PUBLIC_URL else None
+    body = (f'{CATEGORIES[row["category"]]} in your class "{row["class_name"]}".\n\n'
+            f'Student: {row["student_name"]} ({row["student_email"]})\n\n'
+            + (f'Review the conversation (sign in with your teacher account):\n{link}\n' if link else
+               'Sign in to the Imposter class dashboard to review the conversation.\n')
+            + '\nThis automated check can be wrong. Please read the conversation before acting. '
+              'The message text is not included in this email to protect student privacy.\n')
+    ok, detail = send_mail(row['teacher'], f'Imposter safety alert: {row["class_name"]}', body)
+    _set_status(db, alert_id, 'sent' if ok else 'failed', detail)
+
+
+def mail_test(db, user):
+    """Teachers can send themselves a test message to find out whether alert emails will actually arrive."""
+    need_teacher(user)
+    if not mail_configured():
+        return {'ok': False, 'detail': 'Email is not set up on this server yet, so alerts only appear in your dashboard.'}
+    ok, detail = send_mail(user['email'], 'Imposter test email',
+                           'This is a test from your Imposter site. If you can read this, safety alerts will reach this address.\n')
+    return {'ok': ok, 'detail': detail}
 
 
 def alerts_list(db, user):
@@ -1201,6 +1245,8 @@ def dispatch(db, path, d, ask=None):
         return save_nicknames(db, user, d.get('classId'), d.get('nicknames'))
     if path == '/api/class/transcript':
         return {'conversations': transcript(db, user, d.get('classId'), d.get('email'))}
+    if path == '/api/class/mailtest':
+        return mail_test(db, user)
     if path == '/api/class/alerts':
         return {'alerts': alerts_list(db, user)}
     if path == '/api/class/alert':

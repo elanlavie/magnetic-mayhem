@@ -28,7 +28,10 @@ Set `AUTH_MODE=classes` to require Google sign-in. Leave it unset (or `off`) for
 | `OPEN_TEACHER_SIGNUP` | `1` lets any Google account become a teacher so other teachers can use the site. Anyone could then create classes; leave off unless you want that |
 | `DEFAULT_STUDENT_DOMAINS` | Default student email domains for new classes (e.g. `wccschools.org`) |
 | `PUBLIC_URL` | Public site address, used in invite links and alert emails |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `ALERT_FROM` | Outgoing mail for safety alerts. Without these the dashboard still shows alerts and labels email as "not configured" |
+| `RESEND_API_KEY`, `ALERT_FROM` | Recommended for alert emails. Sends through the Resend service over HTTPS, which works on hosts that block normal mail ports. `ALERT_FROM` must be an address on a domain you verified in Resend (or `onboarding@resend.dev`, which only delivers to the Resend account's own email) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `ALERT_FROM` | Alternative: send through an ordinary mail server. Many free hosts (including Render's free plan) block these ports. Without either option the dashboard still shows alerts and labels email as "not configured" |
+
+After setting these, sign in as a teacher, open Classes, and press **Send me a test email** to confirm alerts will arrive.
 
 ### Google setup
 1. Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID → Web application.

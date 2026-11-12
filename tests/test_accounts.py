@@ -1,4 +1,4 @@
-import copy, os, sys, tempfile, time, unittest, uuid
+import json, copy, os, sys, tempfile, time, unittest, uuid
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -470,6 +470,26 @@ class ClassTests(unittest.TestCase):
         joined = game.dispatch('/api/join', {'userToken': self.alex, 'code': made['code']})
         me = game.get({'userToken': self.alex, 'code': made['code'], 'token': joined['token']})[1]
         self.assertNotIn('0:0', me['roundTasks']); self.assertNotIn('1:1', me['roundTasks'])
+
+    def test_test_email_reports_honestly_and_resend_is_used_when_configured(self):
+        r = self.api('/api/class/mailtest', self.teacher); self.assertFalse(r['ok']); self.assertIn('not set up', r['detail'])
+        with self.assertRaises(accounts.AuthError): self.api('/api/class/mailtest', self.alex)
+        sent = []
+        class Resp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        def fake_urlopen(req, timeout=0):
+            sent.append((req.full_url, req.get_header('Authorization'), json.loads(req.data)))
+            return Resp()
+        os.environ['RESEND_API_KEY'] = 're_test'; os.environ['ALERT_FROM'] = 'alerts@example.org'
+        try:
+            with patch.object(accounts, 'urlopen', fake_urlopen):
+                r = self.api('/api/class/mailtest', self.teacher)
+            self.assertTrue(r['ok']); self.assertEqual(sent[0][0], 'https://api.resend.com/emails')
+            self.assertEqual((sent[0][1], sent[0][2]['to'], sent[0][2]['from']), ('Bearer re_test', ['teach@wccusd.net'], 'alerts@example.org'))
+            self.assertNotIn('re_test', json.dumps(r))
+        finally:
+            os.environ.pop('RESEND_API_KEY', None); os.environ.pop('ALERT_FROM', None)
 
 
 if __name__ == '__main__': unittest.main()
