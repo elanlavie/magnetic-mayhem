@@ -107,6 +107,20 @@ class GameTests(unittest.TestCase):
         for i in range(5):game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':f'h{i}','kind':'hint','text':''})
         a=self.p['active'];self.assertEqual((a['attempts'],self.p['cells'],self.p['hints']),(0,0,0))
         self.assertEqual(sum(1 for m in a['messages'] if m['text']=='Hint, please.'),5)
+    def test_repeated_no_effort_answers_are_counted_for_the_tutor(self):
+        self.assertTrue(all(game.no_try(x) for x in ('idk','I don\'t know','i dont know.','No idea','not sure','i give up','?')))
+        self.assertFalse(any(game.no_try(x) for x in ('I don\'t know why the magnet pulls the nail','magnets attract iron','It is because of the field')))
+        seen=[];orig=game.ai
+        def spy(system,data,*args,**kw):
+            seen.append(data.get('dont_know_in_a_row'));return orig(system,data,*args,**kw)
+        game.ai=spy
+        try:
+            self.start()
+            for i,txt in enumerate(['idk','i don\'t know','hint','no idea','I think the force gets weaker','idk']):
+                kind='hint' if txt=='hint' else 'answer'
+                game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':f'n{i}','kind':kind,'text':'' if kind=='hint' else txt})
+        finally:game.ai=orig
+        self.assertEqual(seen,[1,2,0,3,0,1])  # hint requests are never counted, and a real attempt starts over
     def test_tutor_is_told_how_many_hints_were_already_given(self):
         seen=[]
         orig=game.ai
