@@ -50,6 +50,7 @@ function climbHud(){
   swap('side-eyebrow','STATION STATUS','TOWER PROGRESS');swap('side-title','Bring it back<br>to life.','Climb to<br>the top.');
   swap('side-face','🧑‍🔧','🧗');swap('side-card-title','🛠️ Ship engineer','🧗 Tower guide');
   swap('side-card-text','Run supplies 📦, collect energy ⚡, and repair the station 🔧. Chat whenever you want; leave whenever you want.','Moving and jumping use energy. Answer a question any time and explain your thinking to refill it, then keep climbing.');
+  const rh=document.querySelector('.rooms-strip h3');if(rh)rh.textContent=climb?'📚 Topics':'🚪 Your rooms';
   $('#boost-meter')?.classList.toggle('hidden',climb);$('#objectivesbtn')?.classList.toggle('hidden',climb);
   if(!climb)return;
   const h=climbHeight(),floors=climbFloors();
