@@ -413,3 +413,5 @@ body.hw-chat #game .play-layout,body.hw-chat #game .game-chips,body.hw-chat #gam
 
 .viewport.climb #near-label{display:none}
 @media(max-width:600px),(pointer:coarse){.viewport.climb .interact{top:44px;left:auto;right:36px;transform:none;padding:4px 6px}}
+.aq-row{display:flex;gap:8px;align-items:center;margin:4px 0}.aq-row .aq-choice{flex:1;margin:0}.aq-row input[type=radio]{width:auto;margin:0}
+.q-del{margin-top:6px}

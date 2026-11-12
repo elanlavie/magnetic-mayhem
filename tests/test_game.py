@@ -38,13 +38,13 @@ class GameTests(unittest.TestCase):
         auth,p,a=self.mc_player();self.assertEqual(a['mode'],'mc');self.assertEqual(len(a['choices']),4);self.assertNotIn('correct',a);self.assertEqual(sorted(a['choices']),['A one','B two','C three','D four'])
         with self.assertRaises(game.GameError):self.mc_chat(auth,p)  # nothing picked
         r=self.mc_chat(auth,p,True)['player']['active'];self.assertTrue(r['done']);self.assertEqual(p['score'],1)
-    def test_mc_only_miss_explains_ends_the_question_and_never_repeats(self):
+    def test_mc_only_miss_explains_and_earns_nothing(self):
         auth,p,a=self.mc_player();cells=p['cells']
         r=self.mc_chat(auth,p,False)['player']['active'];self.assertTrue(r['done']);self.assertEqual(p['score'],0);self.assertEqual(p['cells'],cells)
-        txt=r['messages'][-1]['text'];self.assertIn('B two',txt);self.assertIn('Because B is right.',txt);self.assertEqual(p['completed'],['0:0'])
+        txt=r['messages'][-1]['text'];self.assertIn('B two',txt);self.assertIn('Because B is right.',txt);self.assertEqual(p['completed'],[])
         game.dispatch('/api/leave',auth);p['x'],p['y']=game.POSITIONS[0]
         again=game.dispatch('/api/start',{**auth,'topic':0})['player']['active'];self.assertTrue(again['messages'][0]['text']!='' )
-        self.assertEqual(game.ROOMS[auth['code']]['players'][p['id']]['completed'],['0:0'])
+        self.assertEqual(game.ROOMS[auth['code']]['players'][p['id']]['completed'],[]);self.assertEqual(again['messages'][0]['text'],a['prompt'])  # the same question comes back
     def test_public_state_hides_keys_and_answers(self):
         r=game.dispatch('/api/state',self.auth); text=json.dumps(r['room']);self.assertNotIn(self.auth['token'],text);self.assertNotIn(self.created['host'],text);self.assertNotIn('terms',text);self.assertNotIn('questions',text)
     def test_success_and_duplicate_request(self):

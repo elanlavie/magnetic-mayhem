@@ -554,14 +554,14 @@ def dispatch(path,d):
             a['messages'].append({'role':'user','text':text})
             miss=not ok
             if ok:p['rightN']=p.get('rightN',0)+1
-            if miss: a['attempts']+=1;a['repair']=True  # one shot at a question: explain it, award nothing
+            if miss: a['attempts']+=1;a['repair']=True  # a miss shows the answer and earns nothing; the question comes back later
             points=0 if miss else 1
             a['points']=points;a['celebrate']=points>0
             qid=f"{a['topic']}:{a['index']}"
-            if qid not in p['completed'] and (not a.get('practice') or r.get('game')):
+            if ok and qid not in p['completed'] and (not a.get('practice') or r.get('game')):
                 p['completed'].append(qid); p['score']+=points; p['cells']+=0 if miss else 1
                 p['history'].append({'question':qid,'points':points,'supported':miss,'topic':r['pack']['topics'][a['topic']]['name']})
-            if r.get('game') and chat_round==p.get('socialRound'):
+            if ok and r.get('game') and chat_round==p.get('socialRound'):
                 social.conversation_completed(r,p,qid);social.record_task(r,p,qid)
             a['done']=True
             if r.get('assignmentId') and p.get('email') and not miss:
