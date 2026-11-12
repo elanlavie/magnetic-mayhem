@@ -12,7 +12,7 @@ class SocialError(Exception):
     pass
 
 KILL_COOLDOWN=20
-KILL_PENALTY=2
+KILL_PENALTY=1
 MAX_EJECT=3
 MAX_SUSPECTS=3
 MAX_SHIELDS=2
@@ -21,7 +21,7 @@ def configure(room,options):
     room['game']={'phase':'lobby','round':0,'impostorCount':1,
                   'tasksPerCrew':max(1,min(7,int(options.get('tasksPerCrew',5)))),
                   'roundSeconds':(0 if not int(options.get('roundSeconds',0) or 0) else max(120,min(3600,int(options['roundSeconds'])))),'crewTargetPct':max(50,min(100,int(options.get('crewTargetPct',80)))),'roundEndsAt':0,
-                  'meetingSeconds':(0 if int(options.get('meetingSeconds',240) or 0)==0 else max(60,min(900,int(options.get('meetingSeconds',240))))),
+                  'meetingSeconds':(0 if int(options.get('meetingSeconds',180) or 0)==0 else max(60,min(900,int(options.get('meetingSeconds',180))))),
                   'briefingSeconds':max(10,min(120,int(options.get('briefingSeconds',60) or 60))),'briefingEndsAt':0,'impostorsEjected':0,
                   'interruptChats':bool(options.get('interruptChats',True)),
                   'tagDelay':(None if str(options.get('tagDelay','auto')).strip().lower() in ('','auto','none') else max(0,min(60,int(float(options.get('tagDelay'))))) ),
@@ -32,12 +32,12 @@ def configure(room,options):
                   'lastMeeting':None,'nextMeetingAt':0}
 
 MIN_PLAYERS=4
-TAGS_PER_CHAT=2
+TAGS_PER_CHAT=1
 SAFE_AFTER_CHAT=4
 
 def impostors_for(n):
-    """Among Us style proportions: 1 imposter for small groups, 2 from 7 players, then about one per 3.5 players."""
-    return max(1,int(n/3.5))
+    """Among Us style proportions: about one imposter per five players (2 of 10, 6 of 30), and always at least one."""
+    return max(1,int(n/5))
 
 def park(player):
     if player.get('active'):

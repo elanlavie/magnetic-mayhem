@@ -73,7 +73,7 @@ class SocialTests(unittest.TestCase):
         for action in ('emergency','report'):
             with self.assertRaises(game.GameError):self.act(self.crew[0],action,target='x')
         self.g['nextMeetingAt']=time.time()-1;game.dispatch('/api/state',self.auth[self.crew[0]['id']])
-        self.assertEqual(self.g['phase'],'playing');self.assertGreater(self.g['nextMeetingAt'],time.time()+200)  # nobody tagged: skipped, timer restarts
+        self.assertEqual(self.g['phase'],'playing');self.assertGreater(self.g['nextMeetingAt'],time.time()+150)  # nobody tagged: skipped, timer restarts
         self.g['tagsSinceMeeting']=1;self.g['nextMeetingAt']=time.time()-1;game.dispatch('/api/state',self.auth[self.crew[0]['id']])
         self.assertEqual(self.g['phase'],'meeting')
     def test_meeting_interrupts_chats_by_default_and_saves_them(self):
@@ -140,7 +140,7 @@ class SocialTests(unittest.TestCase):
         t['pendingTag']['at']=time.time()-1;social.advance(self.room)
         self.assertFalse(t['alive']);self.assertEqual(self.g['tagFeed'][-1]['name'],t['name']);self.assertEqual(self.g['penalty'],social.KILL_PENALTY)
     def test_meeting_frequency_is_a_teacher_option(self):
-        self.assertEqual(self.g['meetingSeconds'],240)
+        self.assertEqual(self.g['meetingSeconds'],180)
         h=game.dispatch('/api/create',{'mode':'infiltration','teacherKey':'teacher-test','meetingSeconds':120});self.assertEqual(game.ROOMS[h['code']]['game']['meetingSeconds'],120)
         h=game.dispatch('/api/create',{'mode':'infiltration','teacherKey':'teacher-test','meetingSeconds':0});self.assertEqual(game.ROOMS[h['code']]['game']['meetingSeconds'],0)
     def test_multi_vote_threshold_and_limits(self):
@@ -193,8 +193,8 @@ class SocialTests(unittest.TestCase):
     def test_impostor_must_finish_conversations_before_tagging(self):
         self.imp.update(killReadyAt=0,x=800,y=460);self.crew[0].update(x=830,y=460)
         with self.assertRaises(game.GameError):self.act(self.imp,'tag',target=self.crew[0]['id'])
-        self.finish_chat(self.imp);self.assertEqual(self.imp['tagCharge'],2)  # one chat powers two tags
-        self.imp.update(x=800,y=460);self.act(self.imp,'tag',target=self.crew[0]['id']);self.land();self.assertFalse(self.crew[0]['alive']);self.assertEqual(self.imp['tagCharge'],1)
+        self.finish_chat(self.imp);self.assertEqual(self.imp['tagCharge'],1)  # one chat powers one tag
+        self.imp.update(x=800,y=460);self.act(self.imp,'tag',target=self.crew[0]['id']);self.land();self.assertFalse(self.crew[0]['alive']);self.assertEqual(self.imp['tagCharge'],0)
     def test_extra_chat_after_tasks_earns_shield_that_blocks_one_tag(self):
         c=self.crew[0];c['roundDone']=list(c['roundTasks']);before=social.task_counts(self.room)
         self.finish_chat(c,topic=int(c['roundTasks'][0].split(':')[0]));self.assertEqual(c['shield'],1);self.assertEqual(social.task_counts(self.room),before)
@@ -218,7 +218,7 @@ class SocialTests(unittest.TestCase):
         with self.assertRaises(game.GameError):game.dispatch('/api/start',{**self.auth[p['id']],'topic':i})  # cannot hop straight back in
         p['safeUntil']=0;self.act(self.imp,'tag',target=p['id']);self.land();self.assertFalse(p['alive'])
     def test_impostor_count_follows_among_us_ratio_and_target(self):
-        self.assertEqual([social.impostors_for(n) for n in (4,7,8,10,12,30)],[1,2,2,2,3,8])
+        self.assertEqual([social.impostors_for(n) for n in (4,7,8,10,12,30)],[1,1,1,2,2,6])
         total=social.task_counts(self.room)[1];self.assertEqual(social.target_for(self.room,10),8)
     def test_round_timer_gives_impostors_the_win_and_crew_target_wins(self):
         self.g['roundEndsAt']=time.time()-1;social.advance(self.room);self.assertEqual(self.g['winner'],'impostors')
