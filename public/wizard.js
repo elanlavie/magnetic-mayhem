@@ -49,3 +49,6 @@
   const orig=window.settingsApply;
   if(typeof orig==='function')window.settingsApply=function(s){const mode=s?.mode,r=orig.apply(this,arguments);syncGameType();if(mode&&[...gm.options].some(o=>o.value===mode))gm.value=mode;gm.dispatchEvent(new Event('change'));return r};
 })();
+
+// After the questions are created, move on to review them.
+(function(){const g=document.getElementById('generate');if(!g)return;let was=false;new MutationObserver(()=>{const busy=g.disabled;if(was&&!busy&&(typeof pack!=='undefined'&&pack?.topics?.length)&&!document.querySelector('#generate-note')?.textContent.match(/couldn|error|failed/i))document.getElementById('wiz-next-1')?.click();was=busy}).observe(g,{attributes:true,attributeFilter:['disabled']})})();
