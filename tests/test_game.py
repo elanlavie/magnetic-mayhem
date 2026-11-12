@@ -272,11 +272,24 @@ class UpgradeTests(unittest.TestCase):
 
     def test_game_types_listed_and_default_is_station(self):
         types={t['id']:t for t in game.dispatch('/api/config',{})['gameTypes']}
-        self.assertTrue(types['station']['available']);self.assertFalse(types['climb']['available'])
+        self.assertTrue(types['station']['available']);self.assertTrue(types['climb']['available'])
         self.assertEqual(game.room_public(game.ROOMS[self.auth['code']])['gameType'],'station')
     def test_unavailable_or_unknown_game_type_is_rejected(self):
-        for bad in ('climb','nonsense'):
-            with self.assertRaises(game.GameError):game.dispatch('/api/create',{'mode':'coop','gameType':bad,'pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
+        with self.assertRaises(game.GameError):game.dispatch('/api/create',{'mode':'coop','gameType':'nonsense','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
+        with self.assertRaises(game.GameError):game.dispatch('/api/create',{'mode':'infiltration','gameType':'climb','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
+    def test_climb_picks_unanswered_questions_and_moves_freely(self):
+        made=game.dispatch('/api/create',{'mode':'coop','gameType':'climb','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
+        joined=game.dispatch('/api/join',{'code':made['code'],'name':'Sam'});auth={'code':made['code'],'token':joined['token']}
+        r,p=game.get(auth)
+        self.assertEqual(game.room_public(r)['floors'],min(game.CLIMB_CAP,sum(len(t['questions']) for t in r['pack']['topics'])))
+        moved=game.dispatch('/api/move',{**auth,'x':450,'y':-330})
+        self.assertEqual((moved['x'],moved['y']),(450,-330))
+        game.dispatch('/api/move',{**auth,'x':450,'y':-99999});self.assertEqual(p['y'],-330)
+        snap=game.dispatch('/api/start',{**auth,'topic':2});self.assertEqual(snap['player']['active']['topic'],2)
+        p['completed']=[f'2:{i}' for i in range(len(r['pack']['topics'][2]['questions']))];p['active']=None
+        self.assertNotEqual(game.climb_pick(r,p,2),2)
+        p['completed']=[f'{i}:{j}' for i,t in enumerate(r['pack']['topics']) for j in range(len(t['questions']))]
+        self.assertIsNone(game.climb_pick(r,p,0))
     def test_old_rooms_load_as_station_and_study_rooms_inherit_type(self):
         r=game.ROOMS[self.auth['code']];r.pop('gameType');game.save();game.ROOMS.clear();game.load()
         self.assertEqual(game.ROOMS[self.auth['code']]['gameType'],'station')

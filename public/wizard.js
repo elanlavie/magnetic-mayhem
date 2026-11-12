@@ -39,3 +39,13 @@
  setTimeout(()=>{try{if(config&&config.teacherProtected)$('#key-box').classList.remove('hidden')}catch{}},800);
  go(1);
 })();
+
+// Tower climb offers different ways to play than the space station, so the "How the class plays" list follows the game choice.
+(function(){
+  const gt=$('#gametype'),gm=$('#gamemode');if(!gt||!gm)return;
+  const station=gm.innerHTML;
+  function syncGameType(){const cur=gm.value;gm.innerHTML=gt.value==='climb'?'<option value="coop" selected>🧗 Class climb: everyone climbs together</option><option value="race">🏁 Two-team climbing race</option>':station;if([...gm.options].some(o=>o.value===cur))gm.value=cur;gm.dispatchEvent(new Event('change'))}
+  gt.addEventListener('change',syncGameType);
+  const orig=window.settingsApply;
+  if(typeof orig==='function')window.settingsApply=function(s){const mode=s?.mode,r=orig.apply(this,arguments);syncGameType();if(mode&&[...gm.options].some(o=>o.value===mode))gm.value=mode;gm.dispatchEvent(new Event('change'));return r};
+})();
