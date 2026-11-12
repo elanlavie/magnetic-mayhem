@@ -103,7 +103,7 @@ With `AUTH_MODE=classes`, students and teachers sign in with Google. Teachers cr
 
 ## Hosting
 
-Run a single instance behind HTTPS. The included `render.yaml` proposes one paid Python service with a 1 GB persistent disk. The existing production service is at https://magnetic-mayhem.onrender.com/. GitHub source: https://github.com/elanlavie/magnetic-mayhem.
+Run a single instance behind HTTPS. The included `render.yaml` proposes one paid Python service with a 1 GB persistent disk. The existing production service is at https://imposter.elanlavie.net/ (Render address: https://magnetic-mayhem.onrender.com/). GitHub source: https://github.com/elanlavie/magnetic-mayhem.
 
 SQLite stores rooms, conversations, progress, and relay records. Only files on the mounted disk survive deployment. Rooms load for up to seven days; expired records remain in the database. This prototype has a 40-player room cap, not a classroom load guarantee. It has no school identity system or automatic application-level API budget. Use nicknames and manage retention appropriately. Live curriculum and messages go to Anthropic.
 
