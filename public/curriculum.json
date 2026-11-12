@@ -7,14 +7,26 @@
    "color": "#a995ff",
    "questions": [
     {
-     "prompt": "A friend says school should start later. Name one piece of evidence that would make that claim stronger, and explain why.",
-     "answer": "Strong evidence is specific and checkable, like a study showing teens learn better with more sleep. It supports the claim instead of just repeating it.",
-     "hint": "Think about proof you could point to, not just an opinion."
+     "prompt": "A friend says school should start later. Which is the strongest piece of evidence for that claim?",
+     "choices": [
+      "Everyone I know thinks so",
+      "A study showing teens learn better when they sleep more",
+      "School starts too early, which is bad",
+      "My cousin's school did it"
+     ],
+     "correct": 1,
+     "answer": "Strong evidence is specific and checkable, like a study. It supports the claim instead of just repeating it."
     },
     {
      "prompt": "Why is 'everyone knows it's true' a weak reason to believe a claim?",
-     "answer": "Popularity is not proof. A claim needs evidence that can be checked, since lots of people can believe something false.",
-     "hint": "Ask yourself: how could someone check it?"
+     "choices": [
+      "Popular claims are always false",
+      "Lots of people can believe something false, so it still needs evidence",
+      "Nobody really knows anything",
+      "It is too short to be a reason"
+     ],
+     "correct": 1,
+     "answer": "Popularity is not proof. A claim needs evidence that can be checked."
     }
    ]
   },
@@ -24,14 +36,26 @@
    "color": "#8fe0c2",
    "questions": [
     {
-     "prompt": "If all the frogs in a pond disappeared, what would probably happen to the insects, and why?",
-     "answer": "The insect population would grow because their predator is gone, and then they might eat too many plants.",
-     "hint": "Who eats the insects? Follow the arrow."
+     "prompt": "In a grass, rabbit, fox food chain, what happens to the fox population if most rabbits disappear?",
+     "choices": [
+      "It grows, because there is less competition",
+      "It shrinks, because its food source is gone",
+      "Nothing changes",
+      "The grass disappears"
+     ],
+     "correct": 1,
+     "answer": "Foxes eat rabbits. With far fewer rabbits, foxes have less food and their numbers fall."
     },
     {
-     "prompt": "Why do plants sit at the bottom of almost every food chain?",
-     "answer": "Plants make their own food from sunlight, so they supply the energy every other organism depends on.",
-     "hint": "Where does the first bit of energy come from?"
+     "prompt": "Where does the energy in a food chain start?",
+     "choices": [
+      "In the top predator",
+      "In the soil",
+      "In the sunlight captured by plants",
+      "In the decomposers"
+     ],
+     "correct": 2,
+     "answer": "Plants capture energy from sunlight, and every other link in the chain gets energy from them."
     }
    ]
   },
@@ -41,14 +65,26 @@
    "color": "#ffb74d",
    "questions": [
     {
-     "prompt": "You ate 3/8 of a pizza and your friend ate 1/4. Who ate more, and how do you know?",
-     "answer": "You ate more. 1/4 equals 2/8, and 3/8 is bigger than 2/8.",
-     "hint": "Try giving both fractions the same bottom number."
+     "prompt": "You eat 1/4 of a pizza and your friend eats 1/2. How much of the pizza is left?",
+     "choices": [
+      "1/4",
+      "1/2",
+      "3/4",
+      "1/6"
+     ],
+     "correct": 0,
+     "answer": "1/4 + 1/2 = 3/4 was eaten, so 1/4 is left."
     },
     {
-     "prompt": "A recipe needs 3/4 cup of milk and you want to make half the recipe. How much milk do you use, and why?",
-     "answer": "3/8 cup, because half of 3/4 is 3/4 times 1/2, which is 3/8.",
-     "hint": "Half of something means multiply by 1/2."
+     "prompt": "Which is bigger, 2/3 of a cup or 3/5 of a cup?",
+     "choices": [
+      "3/5 of a cup",
+      "2/3 of a cup",
+      "They are equal",
+      "You cannot tell"
+     ],
+     "correct": 1,
+     "answer": "2/3 is about 0.67 and 3/5 is 0.6, so 2/3 of a cup is bigger."
     }
    ]
   },
@@ -58,14 +94,26 @@
    "color": "#ff8a80",
    "questions": [
     {
-     "prompt": "Why did Roman roads help the empire stay powerful?",
-     "answer": "Roads let armies, messages and trade move quickly, so Rome could control and connect far-away lands.",
-     "hint": "Think about speed and who needed to travel."
+     "prompt": "Why did Roman roads help the empire stay united?",
+     "choices": [
+      "They were pretty to look at",
+      "Armies, messages and trade could move quickly between distant places",
+      "They kept people from traveling",
+      "They were only used for festivals"
+     ],
+     "correct": 1,
+     "answer": "Good roads let soldiers, officials and traders travel fast, which helped Rome control and connect a huge area."
     },
     {
-     "prompt": "Why might a huge empire like Rome be hard to hold together?",
-     "answer": "It is hard to govern, defend and communicate across great distances, and different regions may not feel loyal to one ruler.",
-     "hint": "Imagine running something with no phones."
+     "prompt": "What did the Roman Senate mostly do?",
+     "choices": [
+      "Command the army directly every day",
+      "Advise and make laws and decisions for the state",
+      "Collect trash",
+      "Teach children"
+     ],
+     "correct": 1,
+     "answer": "The Senate was a council of leading citizens that debated laws and guided the government."
     }
    ]
   },
@@ -75,14 +123,26 @@
    "color": "#64b5f6",
    "questions": [
     {
-     "prompt": "Why does it often rain more on one side of a mountain than the other?",
-     "answer": "Air rises up the mountain, cools, and drops its water as rain on that side, leaving the far side dry.",
-     "hint": "What happens to warm moist air as it climbs?"
+     "prompt": "Why does water in a puddle disappear on a warm, sunny day?",
+     "choices": [
+      "It soaks into the sun",
+      "It evaporates into the air as water vapor",
+      "It turns into ice",
+      "It sinks to the center of the Earth"
+     ],
+     "correct": 1,
+     "answer": "Heat gives water molecules enough energy to escape into the air as vapor, which is evaporation."
     },
     {
-     "prompt": "Why does a puddle disappear on a sunny day even though it never boiled?",
-     "answer": "Water evaporates from the surface when its fastest molecules escape, and sunlight speeds that up.",
-     "hint": "Evaporation does not need boiling."
+     "prompt": "What causes clouds to form?",
+     "choices": [
+      "Water vapor cools and condenses into tiny droplets",
+      "Smoke from factories",
+      "The wind freezing",
+      "Dust only"
+     ],
+     "correct": 0,
+     "answer": "Rising water vapor cools and condenses on tiny particles, forming the droplets we see as clouds."
     }
    ]
   },
@@ -92,14 +152,26 @@
    "color": "#4dd0e1",
    "questions": [
     {
-     "prompt": "A student tests plant growth using different light AND different water. Why is that a problem?",
-     "answer": "Changing two things at once means you cannot tell which one caused the difference. Test only one variable at a time.",
-     "hint": "If the plants differ, which change gets the credit?"
+     "prompt": "You test whether fertilizer helps plants grow. What should you keep the same for all plants?",
+     "choices": [
+      "The amount of fertilizer",
+      "Light, water and the type of plant",
+      "The height they end up",
+      "Nothing, they should all differ"
+     ],
+     "correct": 1,
+     "answer": "A fair test changes only one thing (the fertilizer). Everything else must stay the same."
     },
     {
-     "prompt": "Why do scientists repeat an experiment more than once?",
-     "answer": "Repeating shows whether the result is reliable or just luck or a mistake in one try.",
-     "hint": "One surprising result could be a fluke."
+     "prompt": "Why do scientists repeat an experiment several times?",
+     "choices": [
+      "To make it take longer",
+      "To see if the result is reliable and not just luck",
+      "Because the first time never counts",
+      "To use up materials"
+     ],
+     "correct": 1,
+     "answer": "Repeating shows whether a result happens consistently instead of being a fluke."
     }
    ]
   },
@@ -109,14 +181,26 @@
    "color": "#ce93d8",
    "questions": [
     {
-     "prompt": "Why can a credit card with 20% interest cost you more than the price tag?",
-     "answer": "If you do not pay it all back right away, interest is added to what you owe, so the total grows over time.",
-     "hint": "Borrowed money comes with a fee."
+     "prompt": "You can buy a 12-pack of juice for $6 or a 6-pack for $4. Which costs less per bottle?",
+     "choices": [
+      "The 6-pack, at about 67 cents",
+      "The 12-pack, at 50 cents",
+      "They cost the same",
+      "You cannot compare them"
+     ],
+     "correct": 1,
+     "answer": "$6 / 12 = 50 cents and $4 / 6 is about 67 cents, so the 12-pack is cheaper per bottle."
     },
     {
-     "prompt": "Why is it smart to save a little money every week, even a small amount?",
-     "answer": "Small amounts add up over time, and savings help you handle surprises without borrowing.",
-     "hint": "Think about a year of little amounts."
+     "prompt": "Why is it a good idea to save a little money every month?",
+     "choices": [
+      "So you never have to spend anything",
+      "So you have money ready for needs and surprises later",
+      "Because banks require it",
+      "It makes prices lower"
+     ],
+     "correct": 1,
+     "answer": "Small, steady savings build up and give you a cushion for later needs and surprises."
     }
    ]
   }

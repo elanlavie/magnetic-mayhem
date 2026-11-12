@@ -7,9 +7,9 @@
 - Build: `pip install -r requirements.txt`.
 - Health check: `/api/config`.
 - Disk: 1 GB at `/var/data`; `GAME_DB=/var/data/game.sqlite3`.
-- Model: `claude-sonnet-5-5`. No scripted tutor or AI-off option.
+- No AI: the site needs no API key.
 
-Keep `ANTHROPIC_API_KEY` and `TEACHER_KEY` in Render's secret environment settings, never in GitHub. The API key created during setup expires December 9, 2026; replace it before that date. Funding and provider availability are required for live tutoring. If the API fails, attempts and progress remain intact.
+Keep `TEACHER_KEY` and `RESEND_API_KEY` in Render's secret environment settings, never in GitHub.
 
 The initial quoted hosting cost was $7/month compute plus $0.25/month disk, before API usage and any applicable additional charges. Review the current hosting invoice for actual charges.
 

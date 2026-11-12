@@ -7,14 +7,14 @@ import social_game as social
 
 class SocialTests(unittest.TestCase):
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory();self.old=(game.DB,game.KEY,game.TEACHER_KEY);game.DB=self.temp.name+'/game.sqlite3';game.KEY='test-key';game.TEACHER_KEY='teacher-test';game.ROOMS.clear()
+        self.temp=tempfile.TemporaryDirectory();self.old=(game.DB,game.TEACHER_KEY);game.DB=self.temp.name+'/game.sqlite3';game.TEACHER_KEY='teacher-test';game.ROOMS.clear()
         self.host=game.dispatch('/api/create',{'mode':'infiltration','teacherKey':'teacher-test','impostors':1,'tasksPerCrew':2})
         self.room=game.ROOMS[self.host['code']];self.auth={}
         for name in ('A','B','C','D'):
             data=game.dispatch('/api/join',{'code':self.host['code'],'name':name});self.auth[data['player']['id']]={'code':self.host['code'],'token':data['token']}
         game.dispatch('/api/host',{**self.host,'action':'startRound'});self.room_=game.ROOMS[self.host['code']];self.assertEqual(self.room_['game']['phase'],'briefing');social.begin_play(self.room_)
         self.imp=next(p for p in self.room['players'].values() if p['role']=='impostor');self.crew=[p for p in self.room['players'].values() if p['role']=='crew'];self.g=self.room['game']
-    def tearDown(self):game.DB,game.KEY,game.TEACHER_KEY=self.old;self.temp.cleanup()
+    def tearDown(self):game.DB,game.TEACHER_KEY=self.old;self.temp.cleanup()
     def act(self,p,action,**extra):return game.dispatch('/api/round',{**self.auth[p['id']],'action':action,**extra})
     def land(self):social.land_tags(self.room,True)
     def open_meeting(self):
@@ -82,7 +82,7 @@ class SocialTests(unittest.TestCase):
             with self.assertRaises(game.GameError):self.act(ghost,action)
         qid=ghost['roundTasks'][0];i,j=map(int,qid.split(':'));ghost.update(x=game.POSITIONS[i][0],y=game.POSITIONS[i][1])
         a=game.dispatch('/api/start',{**self.auth[ghost['id']],'topic':i})['player']['active'];self.assertEqual(a['index'],j)
-        with patch.object(game,'ai',return_value={'status':'correct','feedback':'Good Energy! ⚡'}):game.dispatch('/api/chat',{**self.auth[ghost['id']],'challenge':a['id'],'requestId':str(uuid.uuid4()),'text':'My explanation'})
+        self.pick(ghost,a)
         self.assertIn(qid,ghost['roundDone']);self.assertEqual(social.task_counts(self.room)[0],1)
     def test_impostor_chats_do_not_fill_crew_taskbar(self):
         before=social.task_counts(self.room);social.record_task(self.room,self.imp,self.imp['roundTasks'][0]);self.assertEqual(social.task_counts(self.room),before)
@@ -216,13 +216,16 @@ class SocialTests(unittest.TestCase):
         with self.assertRaises(game.GameError):self.act(p,'vote',meeting=m,target='skip')
         game.dispatch('/api/leave',self.auth[p['id']]);self.act(p,'vote',meeting=m,target='skip');self.assertEqual(self.g['meeting']['votes'][p['id']],[])
         game.dispatch('/api/host',{**self.host,'action':'pause'});self.g['pausedAt']-=20;old=self.g['meeting']['endsAt'];game.dispatch('/api/host',{**self.host,'action':'pause'});self.assertGreaterEqual(self.g['meeting']['endsAt'],old+19)
+    def pick(self,p,a):
+        q=self.room['pack']['topics'][a['topic']]['questions'][a['index']]
+        return game.dispatch('/api/chat',{**self.auth[p['id']],'challenge':a['id'],'requestId':str(uuid.uuid4()),'choice':a['perm'].index(q['correct'])})
     def finish_chat(self,p,topic=None):
-        """Complete one real conversation (Sonnet mocked) and return the question id."""
+        """Complete one real conversation and return the question id."""
         p['blockedUntil']=0
         qid=next(q for q in p['roundTasks'] if q not in p.get('roundDone',[])) if topic is None else None
         i=int(qid.split(':')[0]) if qid else topic;p.update(x=game.POSITIONS[i][0],y=game.POSITIONS[i][1])
         a=game.dispatch('/api/start',{**self.auth[p['id']],'topic':i})['player']['active']
-        with patch.object(game,'ai',return_value={'status':'correct','feedback':'Good Energy! ⚡'}):game.dispatch('/api/chat',{**self.auth[p['id']],'challenge':a['id'],'requestId':str(uuid.uuid4()),'text':'My explanation'})
+        self.pick(p,a)
         game.dispatch('/api/leave',self.auth[p['id']])  # closing the chat, as the UI does
         return f"{a['topic']}:{a['index']}"
     def test_impostor_must_finish_conversations_before_tagging(self):
@@ -297,7 +300,7 @@ class SocialTests(unittest.TestCase):
     def test_solo_bots_are_explicit_and_role_choice_works(self):
         h=game.dispatch('/api/create',{'mode':'impostorSolo','soloRole':'impostor'});j=game.dispatch('/api/join',{'code':h['code'],'name':'Human'});r=game.ROOMS[h['code']]
         self.assertEqual(len(r['players']),6);self.assertEqual(j['player']['role'],'impostor');self.assertEqual(sum(bool(p.get('bot')) for p in r['players'].values()),5)
-        self.assertTrue(j['room']['game']['botPractice']);self.assertTrue(j['room']['ai']);self.assertTrue(j['room']['game']['writtenDiscussion'])
+        self.assertTrue(j['room']['game']['botPractice']);self.assertTrue(j['room']['game']['writtenDiscussion'])
         with self.assertRaises(game.GameError):game.dispatch('/api/join',{'code':h['code'],'name':'Another human'})
     def test_bot_paths_reach_every_station_without_crossing_walls(self):
         for target in game.POSITIONS:
