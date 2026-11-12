@@ -309,3 +309,21 @@ body.in-game #game{padding-top:8px;padding-bottom:8px}
 .timeup-sub{font-size:clamp(14px,2.8dvh,22px)!important}
 .timeup-count{width:clamp(70px,16dvh,130px);height:clamp(70px,16dvh,130px);font-size:clamp(42px,10dvh,80px);margin-bottom:8px}
 .timeup-box button{font-size:clamp(17px,3.4dvh,26px)!important;padding:12px 28px!important}
+/* Build-your-game: four-step setup */
+.wiz-steps{list-style:none;display:flex;gap:8px;margin:0 0 18px;padding:0;flex-wrap:wrap}
+.wiz-steps li{flex:1 1 140px}
+.wiz-steps button{width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:#ffffff0a;color:var(--muted);font:700 14px 'Nunito',sans-serif;cursor:pointer;text-align:left}
+.wiz-steps button span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#ffffff18;font-size:13px}
+.wiz-steps li.on button{border-color:var(--peach,#ffb597);color:#fff;background:#ffb59722}
+.wiz-steps li.on button span{background:var(--peach,#ffb597);color:#3a2620}
+.wiz-steps li.done button span{background:var(--mint,#7be0c0);color:#17382f}
+#setup .wizard{display:block;max-width:880px;margin:0 auto}
+#setup .wizard .wiz{display:none}#setup .wizard .wiz.on{display:block}
+#setup .wiz h2{margin-top:0}
+#setup .wiz .step{display:block;margin:22px 0 6px}
+.wiz-nav{display:flex;justify-content:space-between;gap:12px;margin-top:26px;padding-top:16px;border-top:1px solid var(--line)}
+.adv{margin:12px 0;border:1px solid var(--line);border-radius:10px;padding:8px 14px}.adv summary{cursor:pointer;font-weight:700;color:var(--muted)}.adv[open] summary{margin-bottom:8px}
+.launch-summary{font-size:17px;line-height:1.6;padding:14px 16px;border-radius:12px;background:#ffffff0d;border:1px solid var(--line)}
+.launch-summary.bad{border-color:#e48a8a}.launch-summary .warn{color:#ffb4b4;font-size:14px}
+#savedbox{width:100%;margin:0 0 18px}
+#setup #savedbox .saved-row{width:100%}
