@@ -172,7 +172,7 @@ const Classes=(()=>{
    row.querySelector('[data-act=del]').onclick=async()=>{if(!confirm('Delete “'+p.title+'”? Students lose access to it.'))return;try{await call('/api/pack/delete',{id});if(savedId===id)savedId=null;packsLoad()}catch(e){toast(e.message)}}})}
  function packsMount(){
   if(document.getElementById('savedbox'))return;
-  document.getElementById('packtitle').insertAdjacentHTML('beforebegin','<details id="savedbox" class="lib-box" open><summary>🗂️ My saved games <span class="muted">(build once, reuse anywhere)</span></summary><div id="saved-list"></div></details>');
+  document.getElementById('packtitle').closest('.two').insertAdjacentHTML('beforebegin','<details id="savedbox" class="lib-box" open><summary>🗂️ My saved games <span class="muted">(build once, reuse anywhere)</span></summary><div id="saved-list"></div></details>');
   packsLoad()}
  // Save (or update) the current pack. Returns its id so a room or solo game can be created from it.
  async function savePack(){if(!pack)return null;try{const r=await call('/api/pack/save',{pack,id:savedId||undefined,folder:savedId?undefined:curFolder||undefined});savedId=r.id;packsLoad();return r.id}catch(e){if(savedId){savedId=null;return savePack()}return null}}
@@ -266,7 +266,7 @@ const Classes=(()=>{
  function prepareSetup(){
   if(!document.getElementById('classpick')){
    const gt=document.getElementById('gametype');
-   gt.insertAdjacentHTML('beforebegin','<label for="classpick">Class</label><select id="classpick"></select>');
+   gt.insertAdjacentHTML('beforebegin','<label for="classpick">Which class is this for?</label><select id="classpick"></select>');
    const an=document.getElementById('autonames');
    an.checked=false;an.parentElement.lastChild.textContent=' 🐼 Hide real names: give students anonymous fun names for this game';
    an.parentElement.insertAdjacentHTML('afterend','<p class="hint-text">Unchecked: students appear with the nicknames you saved for the class, so you can match online play to who is in the room. Checked: they get random names, and only you can see who is who.</p>');
