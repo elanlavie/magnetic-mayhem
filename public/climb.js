@@ -23,6 +23,7 @@ function climbHud(){
   const mb=document.querySelector('.map-bottom');if(mb)mb.innerHTML=climb?'<span>← → &nbsp; MOVE</span><span>↑ / SPACE &nbsp; JUMP</span><span>ENTER &nbsp; ANSWER AT THE GATE</span>':'<span>WASD / ↑↓←→ &nbsp; MOVE</span><span>ENTER &nbsp; INTERACT</span><span>SPACE &nbsp; DASH · RECHARGES</span><span>⚡ COLLECT CELLS</span>';
   $('#world')?.setAttribute('aria-label',climb?'Tower. Move with left and right arrows, jump with up arrow or space, press Enter at the gate to answer a question.':'Space station. Move using WASD or arrow keys; press Enter near a station to interact.');
   $('#viewport')?.classList.toggle('climb',climb);
+  const jb=document.querySelector('.dashbtn');if(jb){if(jb.dataset.orig===undefined)jb.dataset.orig=jb.innerHTML;jb.innerHTML=climb?'⬆️<small>JUMP</small>':jb.dataset.orig;jb.setAttribute('aria-label',climb?'Jump':'Dash')}
   const swap=(id,station,tower)=>{const e=document.getElementById(id);if(e)e.innerHTML=climb?tower:station};
   swap('side-eyebrow','STATION STATUS','TOWER PROGRESS');swap('side-title','Bring it back<br>to life.','Climb to<br>the top.');
   swap('side-face','🧑‍🔧','🧗');swap('side-card-title','🛠️ Ship engineer','🧗 Tower guide');
@@ -57,7 +58,7 @@ function drawClimb(ts,dt,paused){
   if(!paused){
     const left=keys.has('a')||keys.has('arrowleft'),right=keys.has('d')||keys.has('arrowright'),jump=keys.has('w')||keys.has('arrowup')||keys.has(' ');
     const want=((right?1:0)-(left?1:0))*CLIMB.SPEED;CLIMB.vx+=(want-CLIMB.vx)*Math.min(1,dt*(CLIMB.ground?18:9));
-    if(jump&&!CLIMB.jumpHeld){CLIMB.buf=.12}CLIMB.jumpHeld=jump;CLIMB.buf=Math.max(0,CLIMB.buf-dt);CLIMB.coyote=CLIMB.ground?.1:Math.max(0,CLIMB.coyote-dt);
+    if(jump)CLIMB.buf=.12;CLIMB.jumpHeld=jump;CLIMB.buf=Math.max(0,CLIMB.buf-dt);CLIMB.coyote=CLIMB.ground?.1:Math.max(0,CLIMB.coyote-dt);
     if(CLIMB.buf>0&&CLIMB.coyote>0){CLIMB.vy=-CLIMB.JUMP;CLIMB.buf=0;CLIMB.coyote=0;CLIMB.ground=false}
     const prevFeet=pos.y+CLIMB.HALF;CLIMB.vy=Math.min(1300,CLIMB.vy+CLIMB.G*dt);pos.x=Math.max(16,Math.min(CLIMB.W-16,pos.x+CLIMB.vx*dt));pos.y+=CLIMB.vy*dt;
     const feet=pos.y+CLIMB.HALF;CLIMB.ground=false;
