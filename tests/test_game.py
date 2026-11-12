@@ -7,148 +7,53 @@ import server as game
 
 class GameTests(unittest.TestCase):
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory(); game.DB=self.temp.name+'/test.sqlite'; game.ROOMS.clear(); self.oldkey=game.KEY; self.oldteacher=game.TEACHER_KEY; game.KEY='test-key'; game.TEACHER_KEY='teacher-test'
-        self.real_ai=game.ai
-        self.ai_patch=patch.object(game,'ai',side_effect=self.fake_ai);self.ai_patch.start()
+        self.temp=tempfile.TemporaryDirectory(); game.DB=self.temp.name+'/test.sqlite'; game.ROOMS.clear(); self.oldteacher=game.TEACHER_KEY; game.TEACHER_KEY='teacher-test'
         self.created=game.dispatch('/api/create',{'mode':'coop','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'})
         self.auth={'code':self.created['code']}
-        j=game.dispatch('/api/join',{**self.auth,'name':'Ada'}); self.auth['token']=j['token']; self.p=game.ROOMS[self.auth['code']]['players'][j['player']['id']]; self.p['cells']=0  # tests count cells from zero; real players start with 2
-    def tearDown(self): self.ai_patch.stop(); game.KEY=self.oldkey; game.TEACHER_KEY=self.oldteacher; self.temp.cleanup()
-    @staticmethod
-    def fake_ai(system,data,max_tokens=650):
-        if data.get('request_type') in ('hint','solution'): return {'status':'help','feedback':'💡 Test hint.'}
-        text=data.get('student','')
-        if text==data['question']['answer']: return {'status':'correct','feedback':'⚡ Test explanation accepted.'}
-        return {'status':'incorrect' if 'unicorn' in text else 'help','feedback':'💬 Test follow-up.'}
+        j=game.dispatch('/api/join',{**self.auth,'name':'Ada'}); self.auth['token']=j['token']; self.p=game.ROOMS[self.auth['code']]['players'][j['player']['id']]; self.p['cells']=0  # tests count cells from zero
+    def tearDown(self): game.TEACHER_KEY=self.oldteacher; self.temp.cleanup()
     def start(self,topic=0):
         self.p['x'],self.p['y']=game.POSITIONS[topic]
         return game.dispatch('/api/start',{**self.auth,'topic':topic})['player']['active']
-    def chat(self,text='',kind='answer',rid=None):
-        return game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':rid or str(uuid.uuid4()),'kind':kind,'text':text})
-    def test_teacher_context_reaches_the_tutor_but_never_the_students(self):
-        note="Students have not met vectors yet. Use fridge magnets <b>as examples</b>."
-        pack=copy.deepcopy(game.BUILTIN);pack['context']='  '+note+'\n\n\n\n'+'x'*3000
-        c=game.dispatch('/api/create',{'mode':'coop','pack':pack,'teacherKey':'teacher-test'})
-        auth={'code':c['code']};j=game.dispatch('/api/join',{**auth,'name':'Mo'});auth['token']=j['token']
-        room=game.ROOMS[c['code']];self.assertEqual(len(room['pack']['context']),game.MAX_CONTEXT);self.assertNotIn('<b>',room['pack']['context'])
-        p=room['players'][j['player']['id']];p['x'],p['y']=game.POSITIONS[0]
-        a=game.dispatch('/api/start',{**auth,'topic':0})['player']['active']
-        seen=[]
-        with patch.object(game,'ai',side_effect=lambda system,data,max_tokens=650:(seen.append(system),{'status':'help','feedback':'Tell me more.'})[1]):
-            game.dispatch('/api/chat',{**auth,'challenge':a['id'],'requestId':str(uuid.uuid4()),'kind':'answer','text':'because of poles'})
-        self.assertIn("TEACHER'S CONTEXT",seen[0]);self.assertIn('fridge magnets',seen[0])
-        self.assertIn('never change the JSON format',seen[0].replace('can never change','never change'))
-        # students' views of the room and of their own state never include the teacher's notes
-        self.assertNotIn('fridge magnets',json.dumps(game.dispatch('/api/state',{**auth})))
-        self.assertNotIn('context',game.public_pack(room['pack']))
-        # no context means no extra block in the prompt
-        seen.clear()
-        with patch.object(game,'ai',side_effect=lambda system,data,max_tokens=650:(seen.append(system),{'status':'help','feedback':'ok'})[1]):
-            self.start();self.chat('because of poles')
-        self.assertNotIn("TEACHER'S CONTEXT",seen[0])
-
-    def mc_player(self,fmt):
-        q=lambda i:{'prompt':'Which is right %d?'%i,'answer':'Because B is right.','hint':'think','choices':['A one','B two','C three','D four'],'correct':1}
-        pack={'title':'MC','format':fmt,'topics':[{'name':'T%d'%i,'icon':'🧲','questions':[q(i)]} for i in range(2)]}
+    def right(self):
+        a=self.p['active'];q=game.resolve_question(copy.deepcopy(game.ROOMS[self.auth['code']]['pack']['topics'][a['topic']]['questions'][a['index']]),a['vi']);return a['perm'].index(q['correct'])
+    def chat(self,ok=True,choice=None,rid=None):
+        n=len(self.p['active']['choices']);idx=choice if choice is not None else (self.right() if ok else (self.right()+1)%n)
+        return game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':rid or str(uuid.uuid4()),'choice':idx})
+    def mc_player(self,fmt=None):
+        q=lambda i:{'prompt':'Which is right %d?'%i,'answer':'Because B is right.','choices':['A one','B two','C three','D four'],'correct':1}
+        pack={'title':'MC','topics':[{'name':'T%d'%i,'icon':'🧲','questions':[q(i)]} for i in range(2)]}
         c=game.dispatch('/api/create',{'mode':'coop','pack':pack,'teacherKey':'teacher-test'})
         auth={'code':c['code']};j=game.dispatch('/api/join',{**auth,'name':'Mo'});auth['token']=j['token']
         p=game.ROOMS[c['code']]['players'][j['player']['id']];p['x'],p['y']=game.POSITIONS[0]
         a=game.dispatch('/api/start',{**auth,'topic':0})['player']['active']
         return auth,p,a
-    def mc_chat(self,auth,p,choice=None,text=''):
-        d={**auth,'challenge':p['active']['id'],'requestId':str(uuid.uuid4()),'kind':'answer','text':text}
+    def mc_chat(self,auth,p,right=None):
+        a=p['active'];idx=a['perm'].index(1)  # the original correct answer is B (index 1)
+        choice=None if right is None else (idx if right else (idx+1)%len(a['choices']))
+        d={**auth,'challenge':a['id'],'requestId':str(uuid.uuid4())}
         if choice is not None:d['choice']=choice
         return game.dispatch('/api/chat',d)
-    def test_pack_format_defaults_and_choice_cleaning(self):
-        self.assertEqual(game.clean_format(None),{'mc':False,'free':True});self.assertEqual(game.clean_format({'mc':False,'free':False}),{'mc':False,'free':True});self.assertEqual(game.clean_format({'mc':True,'free':False}),{'mc':True,'free':False})
-        base=lambda fmt:{'title':'x','format':fmt,'topics':[{'name':'t','questions':[{'prompt':'p','answer':'a','hint':'h','choices':['a','b','c'],'correct':1},{'prompt':'p','answer':'a','hint':'h','choices':['a'],'correct':5}]}]}
-        free=game.validate_pack(base(None));self.assertNotIn('choices',free['topics'][0]['questions'][0])
-        mc=game.validate_pack(base({'mc':True,'free':False}));qs=mc['topics'][0]['questions'];self.assertEqual(qs[0]['choices'],['a','b','c']);self.assertNotIn('choices',qs[1])
-    def test_generator_prompt_asks_for_choices_only_when_mc(self):
-        self.assertIn('"choices":[string]',game.topic_prompt('9th grade',True));self.assertNotIn('"choices"',game.topic_prompt('9th grade',False));self.assertIn('9th grade',game.topic_prompt('9th grade',False))
     def test_mc_only_is_graded_instantly_without_the_tutor(self):
-        auth,p,a=self.mc_player({'mc':True,'free':False});self.assertEqual(a['mode'],'mc');self.assertEqual(len(a['choices']),4);self.assertNotIn('correct',a)
-        self.ai_patch.stop();calls=[];self.ai_patch=patch.object(game,'ai',side_effect=lambda *x,**k:calls.append(1));self.ai_patch.start()
-        with self.assertRaises(game.GameError):self.mc_chat(auth,p)
-        r=self.mc_chat(auth,p,1)['player']['active'];self.assertTrue(r['done']);self.assertEqual(p['score'],1);self.assertEqual(calls,[])
+        auth,p,a=self.mc_player();self.assertEqual(a['mode'],'mc');self.assertEqual(len(a['choices']),4);self.assertNotIn('correct',a);self.assertEqual(sorted(a['choices']),['A one','B two','C three','D four'])
+        with self.assertRaises(game.GameError):self.mc_chat(auth,p)  # nothing picked
+        r=self.mc_chat(auth,p,True)['player']['active'];self.assertTrue(r['done']);self.assertEqual(p['score'],1)
     def test_mc_only_miss_explains_ends_the_question_and_never_repeats(self):
-        auth,p,a=self.mc_player({'mc':True,'free':False});cells=p['cells']
-        r=self.mc_chat(auth,p,0)['player']['active'];self.assertTrue(r['done']);self.assertEqual(p['score'],0);self.assertEqual(p['cells'],cells)
-        txt=r['messages'][-1]['text'];self.assertIn('B) B two',txt);self.assertIn('Because B is right.',txt);self.assertEqual(p['completed'],['0:0'])
+        auth,p,a=self.mc_player();cells=p['cells']
+        r=self.mc_chat(auth,p,False)['player']['active'];self.assertTrue(r['done']);self.assertEqual(p['score'],0);self.assertEqual(p['cells'],cells)
+        txt=r['messages'][-1]['text'];self.assertIn('B two',txt);self.assertIn('Because B is right.',txt);self.assertEqual(p['completed'],['0:0'])
         game.dispatch('/api/leave',auth);p['x'],p['y']=game.POSITIONS[0]
         again=game.dispatch('/api/start',{**auth,'topic':0})['player']['active'];self.assertTrue(again['messages'][0]['text']!='' )
         self.assertEqual(game.ROOMS[auth['code']]['players'][p['id']]['completed'],['0:0'])
-    def test_both_needs_choice_and_reasoning_and_wrong_choice_cannot_pass(self):
-        auth,p,a=self.mc_player({'mc':True,'free':True});self.assertEqual(a['mode'],'both')
-        seen=[];self.ai_patch.stop();self.ai_patch=patch.object(game,'ai',side_effect=lambda s,d,*x,**k:seen.append(d) or {'status':'correct','feedback':'Great!'});self.ai_patch.start()
-        with self.assertRaises(game.GameError):self.mc_chat(auth,p,text='because magnets pull things')
-        with self.assertRaises(game.GameError):self.mc_chat(auth,p,1,'   ')
-        r=self.mc_chat(auth,p,0,'I think magnets pull on iron so this one')['player']['active']
-        self.assertFalse(r['done']);self.assertNotIn('Great',r['messages'][-1]['text']);self.assertEqual(seen[-1]['student_choice'],0);self.assertIn('My choice: A) A one',seen[-1]['student'])
-        r=self.mc_chat(auth,p,1,'poles repel')['player']['active'];self.assertTrue(r['done']);self.assertIn('My reasoning: poles repel',seen[-1]['student'])
-    def test_free_response_pack_ignores_choices(self):
-        auth,p,a=self.mc_player({'mc':False,'free':True});self.assertEqual(a['mode'],'free');self.assertEqual(a['choices'],[])
-    def test_generate_makes_exactly_the_requested_number_of_stations(self):
-        seen=[]
-        def fake(system,data,max_tokens=650,wait=None):
-            if 'topic' not in data:
-                seen.append(system);return {'title':'T','topics':[{'name':'N%d'%i,'icon':'x','focus':'f'} for i in range(7)]}
-            return {'questions':[{'prompt':'Q?','answer':'a','hint':'h'}]}
-        with patch.object(game,'ai',side_effect=fake):
-            r=game.dispatch('/api/generate',{'text':'magnets','count':3,'teacherKey':'teacher-test'})
-            self.assertEqual(len(r['pack']['topics']),3);self.assertIn('exactly 3 topic stations',seen[-1])
-            r=game.dispatch('/api/generate',{'text':'magnets','count':'junk','teacherKey':'teacher-test'});self.assertEqual(len(r['pack']['topics']),5)
     def test_public_state_hides_keys_and_answers(self):
         r=game.dispatch('/api/state',self.auth); text=json.dumps(r['room']);self.assertNotIn(self.auth['token'],text);self.assertNotIn(self.created['host'],text);self.assertNotIn('terms',text);self.assertNotIn('questions',text)
-    def ans(self):
-        a=self.p['active'];return game.BUILTIN['topics'][a['topic']]['questions'][a['index']]['answer']
-    def test_hints_are_unlimited_free_and_never_cost_an_attempt(self):
-        self.start();self.p['cells']=0;self.p['hints']=0
-        for i in range(5):game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':f'h{i}','kind':'hint','text':''})
-        a=self.p['active'];self.assertEqual((a['attempts'],self.p['cells'],self.p['hints']),(0,0,0))
-        self.assertEqual(sum(1 for m in a['messages'] if m['text']=='Hint, please.'),5)
-    def test_repeated_no_effort_answers_are_counted_for_the_tutor(self):
-        self.assertTrue(all(game.no_try(x) for x in ('idk','I don\'t know','i dont know.','No idea','not sure','i give up','?')))
-        self.assertFalse(any(game.no_try(x) for x in ('I don\'t know why the magnet pulls the nail','magnets attract iron','It is because of the field')))
-        seen=[];orig=game.ai
-        def spy(system,data,*args,**kw):
-            seen.append(data.get('dont_know_in_a_row'));return orig(system,data,*args,**kw)
-        game.ai=spy
-        try:
-            self.start()
-            for i,txt in enumerate(['idk','i don\'t know','hint','no idea','I think the force gets weaker','idk']):
-                kind='hint' if txt=='hint' else 'answer'
-                game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':f'n{i}','kind':kind,'text':'' if kind=='hint' else txt})
-        finally:game.ai=orig
-        self.assertEqual(seen,[1,2,0,3,0,1])  # hint requests are never counted, and a real attempt starts over
-    def test_tutor_is_told_how_many_hints_were_already_given(self):
-        seen=[]
-        orig=game.ai
-        def spy(system,data,*args,**kw):
-            seen.append(data.get('hints_already_given'));return orig(system,data,*args,**kw)
-        game.ai=spy
-        try:
-            self.start()
-            for i in range(3):game.dispatch('/api/chat',{**self.auth,'challenge':self.p['active']['id'],'requestId':f'g{i}','kind':'hint','text':''})
-        finally:game.ai=orig
-        self.assertEqual(seen,[0,1,2])
-    def test_short_answer_prompts_reasoning_free(self):
-        self.start();self.chat('yes');self.assertEqual(self.p['active']['attempts'],0)
     def test_success_and_duplicate_request(self):
-        self.start();answer=self.ans();self.chat(answer,rid='same');self.chat(answer,rid='same');self.assertEqual(self.p['score'],1);self.assertEqual(self.p['completed'],['0:%d'%self.p['active']['index']])
-    def test_wrong_attempts_then_supported_revision(self):
-        self.start()
-        for _ in range(3):self.chat('The invisible unicorn sends purple glitter around the entire spaceship every day.')
-        self.assertTrue(self.p['active']['repair']);self.chat(self.ans());self.assertEqual(self.p['score'],0);self.assertTrue(self.p['active']['done'])
-    def test_solution_zero_points(self):
-        self.start();self.chat(kind='solution');self.chat(self.ans());self.assertEqual(self.p['score'],0)
-    def test_second_attempt_half_point(self):
-        self.start();self.chat('The invisible unicorn sends purple glitter around the entire spaceship every day.');self.chat(self.ans());self.assertEqual(self.p['score'],.5)
+        self.start();self.chat(rid='same');self.chat(rid='same');self.assertEqual(self.p['score'],1);self.assertEqual(self.p['completed'],['0:%d'%self.p['active']['index']])
     def test_leave_and_resume_without_losing_progress(self):
-        original=self.start();self.chat(kind='hint');original_id=original['id']
+        original=self.start();original_id=original['id']
         game.dispatch('/api/leave',self.auth);self.assertIsNone(self.p['active'])
         self.start(1);game.dispatch('/api/leave',self.auth)
-        restored=self.start(0);self.assertEqual(restored['id'],original_id);self.assertEqual(len(restored['messages']),3)
+        restored=self.start(0);self.assertEqual(restored['id'],original_id);self.assertEqual(len(restored['messages']),1)
         self.assertEqual(restored['attempts'],0)
     def test_cannot_start_remote(self):
         with self.assertRaises(game.GameError):game.dispatch('/api/start',{**self.auth,'topic':0})
@@ -176,32 +81,7 @@ class GameTests(unittest.TestCase):
         game.dispatch('/api/host',{**self.created,'action':'pause'})
         with self.assertRaises(game.GameError):game.dispatch('/api/move',{**self.auth,'x':810,'y':460})
     def test_restart_recovery(self):
-        self.start();self.chat(kind='hint');game.ROOMS.clear();game.load();r,p=game.get(self.auth);self.assertEqual(len(p['active']['messages']),3)
-    def test_missing_api_key_blocks_play_instead_of_demo(self):
-        game.KEY=''
-        pack=copy.deepcopy(game.BUILTIN);pack['topics'][0]['name']='Biology'
-        with self.assertRaises(game.GameError):game.dispatch('/api/create',{'mode':'solo','pack':pack})
-    def test_failure_does_not_consume_attempt(self):
-        self.start();game.ROOMS[self.auth['code']]['ai']=True
-        with patch.object(game,'ai',side_effect=game.GameError('Unavailable')):
-            with self.assertRaises(game.GameError):self.chat('A sufficiently long answer explaining moving charges and their magnetic field.')
-        self.assertEqual(self.p['active']['attempts'],0);self.assertFalse(self.p['active']['busy']);self.assertEqual(len(self.p['active']['messages']),1)
-    def test_sonnet_55_request_settings(self):
-        game.KEY='dummy-test-key'
-        captured={}
-        def request(req,timeout):
-            captured.update(json.loads(req.data))
-            return io.BytesIO(json.dumps({'content':[{'type':'text','text':'{"status":"help","feedback":"Try a prediction."}'}]}).encode())
-        with patch.object(game,'MODEL','claude-sonnet-5-5'),patch.object(game,'urlopen',side_effect=request):
-            response=self.real_ai('Tutor',{'student':'hello'},650)
-        self.assertEqual(captured['model'],'claude-sonnet-5-5')
-        self.assertEqual(captured['thinking'],{'type':'between_tools'})
-        self.assertEqual(captured['output_config'],{'effort':'medium'})
-        self.assertEqual(response['status'],'help')
-    def test_live_evaluation_and_validation(self):
-        self.start();game.ROOMS[self.auth['code']]['ai']=True
-        with patch.object(game,'ai',return_value={'status':'correct','feedback':'Correct reasoning.'}):self.chat('Natural language explanation without demo keywords.')
-        self.assertEqual(self.p['score'],1)
+        self.start();game.ROOMS.clear();game.load();r,p=game.get(self.auth);self.assertEqual(len(p['active']['messages']),1)
     def test_study_code_clones_approved_pack(self):
         result=game.dispatch('/api/create',{'mode':'solo','source':self.auth['code']})
         self.assertEqual(game.ROOMS[result['code']]['pack']['title'],game.BUILTIN['title'])
@@ -214,25 +94,22 @@ class GameTests(unittest.TestCase):
         self.assertEqual(teams.count('violet'),3);self.assertEqual(teams.count('mint'),2)
     def test_full_playthrough_and_optional_practice(self):
         for topic,t in enumerate(game.BUILTIN['topics']):
-            self.start(topic);self.chat(self.ans());self.assertTrue(self.p['active']['done']);game.dispatch('/api/leave',self.auth)
+            self.start(topic);self.chat();self.assertTrue(self.p['active']['done']);game.dispatch('/api/leave',self.auth)
             self.p['cells']=2;game.dispatch('/api/repair',{**self.auth,'topic':topic})
         self.assertEqual(self.p['score'],7);self.assertEqual(len(self.p['repairs']),7)
-        self.start(0);self.chat(self.ans());self.assertEqual(self.p['score'],7)
+        self.start(0);self.chat();self.assertEqual(self.p['score'],7)
 
 class UpgradeTests(unittest.TestCase):
     setUp=GameTests.setUp
     tearDown=GameTests.tearDown
     start=GameTests.start
     chat=GameTests.chat
-    fake_ai=staticmethod(GameTests.fake_ai)
-    def test_grade_level_is_validated_and_reaches_the_tutor(self):
+    def test_grade_level_is_validated_and_saved_packs_carry_it(self):
         r=game.dispatch('/api/create',{'mode':'coop','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test','grade':'7th grade'});self.assertEqual(game.ROOMS[r['code']]['grade'],'7th grade')
         r=game.dispatch('/api/create',{'mode':'coop','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test','grade':'<script>'});self.assertEqual(game.ROOMS[r['code']]['grade'],'9th grade')
         pk=copy.deepcopy(game.BUILTIN);pk['grade']='11th grade';r=game.dispatch('/api/create',{'mode':'coop','pack':pk,'teacherKey':'teacher-test'});self.assertEqual(game.ROOMS[r['code']]['grade'],'11th grade')  # a saved pack carries its grade
         self.auth={'code':r['code']};j=game.dispatch('/api/join',{**self.auth,'name':'Ada'});self.auth['token']=j['token'];self.p=game.ROOMS[r['code']]['players'][j['player']['id']];self.p['x'],self.p['y']=game.POSITIONS[0]
-        game.dispatch('/api/start',{**self.auth,'topic':0});self.p['cells']=1;self.chat(kind='hint')
-        system,data=game.ai.call_args[0][0],game.ai.call_args[0][1]
-        self.assertIn('11th grade',system);self.assertNotIn('{GRADE}',system);self.assertEqual(data['grade_level'],'11th grade')
+        pass
     def test_characters_have_unique_colors_and_validated_looks(self):
         r=game.dispatch('/api/create',{'mode':'coop','pack':copy.deepcopy(game.BUILTIN),'teacherKey':'teacher-test'});code=r['code'];room=game.ROOMS[code]
         a=game.dispatch('/api/join',{'code':code,'name':'A','look':{'color':'Blue','shape':'cat','face':'wink','hat':'crown'}})
@@ -244,40 +121,14 @@ class UpgradeTests(unittest.TestCase):
         pub={p['name']:p['look']['color'] for p in ok['room']['players']};self.assertEqual(pub,{'A':'Blue','B':'Pink'})  # everyone sees everyone's look
         for n in range(14):game.dispatch('/api/join',{'code':code,'name':f'P{n}','look':{'color':'Blue'}})
         self.assertEqual(len({p['look']['color'] for p in room['players'].values()}),16)  # 16 players, 16 distinct colors
-    def test_solo_cannot_turn_off_claude(self):
-        r=game.dispatch('/api/create',{'mode':'solo','live':False})
-        self.assertTrue(game.ROOMS[r['code']]['ai'])
-        self.assertEqual(game.ROOMS[r['code']]['followup'],30)
-    def test_legacy_session_always_calls_claude_for_short_answers(self):
-        game.ROOMS[self.auth['code']]['ai']=False;self.start(2)
-        with patch.object(game,'ai',return_value={'status':'correct','feedback':'Yes, stronger! ⚡'}) as call:
-            self.chat('The field gets stronger.')
-        call.assert_called_once();self.assertEqual(self.p['score'],1);self.assertEqual(self.p['cells'],1)
-    def test_api_failure_never_falls_back(self):
-        self.start(2)
-        with patch.object(game,'ai',side_effect=game.GameError('Claude unavailable')):
-            with self.assertRaises(game.GameError):self.chat('The field gets stronger.')
-        self.assertFalse(self.p['active']['done']);self.assertEqual(self.p['cells'],0)
     def test_auto_names_override_submitted_names_and_stay_unique(self):
         r=game.ROOMS[self.auth['code']];r['autoNames']=True
         names=[game.dispatch('/api/join',{'code':r['code'],'name':'inappropriate-input'})['player']['name'] for _ in range(20)]
         self.assertEqual(len(set(names)),20);self.assertTrue(all('inappropriate-input' not in n for n in names))
         game.ROOMS.clear();game.load();self.assertTrue(game.ROOMS[r['code']]['autoNames'])
-    def test_leave_during_api_call_keeps_result_on_original_conversation(self):
-        self.start(0);first_id=self.p['active']['id'];first_idx=self.p['active']['index'];started=threading.Event();finish=threading.Event();errors=[]
-        def response(*args):
-            started.set();finish.wait(3);return {'status':'correct','feedback':'⚡ Correct.'}
-        def send():
-            try:self.chat('Moving charges produce a field.')
-            except Exception as exc:errors.append(exc)
-        with patch.object(game,'ai',side_effect=response):
-            worker=threading.Thread(target=send);worker.start();self.assertTrue(started.wait(2))
-            game.dispatch('/api/leave',self.auth);other=self.start(1);finish.set();worker.join(4)
-        self.assertFalse(errors);self.assertEqual(self.p['active']['id'],other['id']);self.assertNotEqual(other['id'],first_id)
-        self.assertTrue(self.p['conversations']['0']['done']);self.assertEqual(self.p['completed'],['0:%d'%first_idx]);self.assertEqual(self.p['cells'],1)
     def test_suspended_chat_survives_restart(self):
-        a=self.start();self.chat(kind='hint');game.dispatch('/api/leave',self.auth);game.ROOMS.clear();game.load()
-        r,self.p=game.get(self.auth);self.assertEqual(self.start()['id'],a['id']);self.assertEqual(len(self.p['active']['messages']),3)
+        a=self.start();game.dispatch('/api/leave',self.auth);game.ROOMS.clear();game.load()
+        r,self.p=game.get(self.auth);self.assertEqual(self.start()['id'],a['id']);self.assertEqual(len(self.p['active']['messages']),1)
     def test_can_leave_while_teacher_paused(self):
         self.start();game.ROOMS[self.auth['code']]['paused']=True;game.dispatch('/api/leave',self.auth);self.assertIsNone(self.p['active'])
     def test_relay_location_order_and_one_reward_per_route(self):
@@ -290,9 +141,9 @@ class UpgradeTests(unittest.TestCase):
             self.assertIsNone(self.p['relay']);self.assertEqual(self.p['cells'],2)
         self.assertEqual(self.p['score'],0);self.assertIn('0',self.p['relayRecords'])
     def test_existing_room_migration_and_private_transcript(self):
-        r=game.ROOMS[self.auth['code']];r['ai']=False;r['followup']=60;self.start();self.chat(kind='hint');game.dispatch('/api/leave',self.auth);game.save()
+        r=game.ROOMS[self.auth['code']];r['followup']=60;self.start();game.dispatch('/api/leave',self.auth);game.save()
         game.ROOMS.clear();game.load();r,p=game.get(self.auth)
-        self.assertTrue(r['ai']);self.assertEqual(r['followup'],30);self.assertNotIn('conversations',json.dumps(game.room_public(r)))
+        self.assertEqual(r['followup'],30);self.assertNotIn('conversations',json.dumps(game.room_public(r)))
 
     def test_game_types_listed_and_default_is_station(self):
         types={t['id']:t for t in game.dispatch('/api/config',{})['gameTypes']}
@@ -343,20 +194,13 @@ class ThinkTimeTests(unittest.TestCase):
     def test_a_question_can_override_its_time_within_bounds(self):
         self.assertEqual(game.think_seconds({'prompt':'x','seconds':500}),150);self.assertEqual(game.think_seconds({'prompt':'x','seconds':5}),30)
         self.assertEqual(game.think_seconds({'prompt':'x','seconds':'bad'},'mc'),30)
-    def test_generator_prompt_demands_short_single_part_questions(self):
-        for mc in (False,True):
-            p=game.topic_prompt('9th grade',mc);self.assertIn('ONE or TWO short sentences',p);self.assertIn('no multi-part',p)
-
-if __name__=='__main__':unittest.main()
-
-
 class MediaPackTests(unittest.TestCase):
     def test_safe_url(self):
         self.assertEqual(game.safe_url('https://phet.colorado.edu/x'),'https://phet.colorado.edu/x')
         for bad in ('http://x.com/a','javascript:alert(1)','https://a b.com',''):
             self.assertEqual(game.safe_url(bad),'')
     def test_pack_keeps_only_https_media(self):
-        p=game.validate_pack({'title':'T','topics':[{'name':'A','sim':{'url':'http://bad.com/x'},'questions':[{'prompt':'Why?','answer':'Because reasons here.','hint':'Think.','image':'javascript:1'}]},{'name':'B','sim':{'url':'https://ok.org/s','title':'S'},'questions':[{'prompt':'Why2?','answer':'Because reasons here.','hint':'Think.','image':'https://ok.org/i.png'}]}]})
+        p=game.validate_pack({'title':'T','topics':[{'name':'A','sim':{'url':'http://bad.com/x'},'questions':[{'prompt':'Why?','answer':'Because reasons here.','choices':['a','b'],'correct':0,'image':'javascript:1'}]},{'name':'B','sim':{'url':'https://ok.org/s','title':'S'},'questions':[{'prompt':'Why2?','answer':'Because reasons here.','choices':['a','b'],'correct':0,'image':'https://ok.org/i.png'}]}]})
         self.assertNotIn('sim',p['topics'][0]);self.assertNotIn('image',p['topics'][0]['questions'][0])
         self.assertEqual(p['topics'][1]['sim']['url'],'https://ok.org/s');self.assertEqual(p['topics'][1]['questions'][0]['image'],'https://ok.org/i.png')
 
@@ -367,7 +211,7 @@ class VariantTests(unittest.TestCase):
         for bad in ('<svg><script>x</script></svg>','<svg onload="x()"></svg>','<svg><image href="http://e"/></svg>','<div></div>','<svg>'+'a'*9000+'</svg>'):
             self.assertEqual(game.clean_svg(bad),'')
     def test_variants_resolved_and_validated(self):
-        q={'prompt':'A','answer':'a','hint':'h','variants':[{'prompt':'B','answer':'b','hint':'h2'}]}
+        q={'prompt':'A','answer':'a','choices':['x','y'],'correct':0,'variants':[{'prompt':'B','answer':'b','choices':['x','y'],'correct':1}]}
         self.assertEqual(game.resolve_question(q,0)['prompt'],'A')
         self.assertEqual(game.resolve_question(q,1)['prompt'],'B')
         self.assertNotIn('variants',game.resolve_question(q,1))
@@ -379,10 +223,10 @@ class VariantEncounterTests(unittest.TestCase):
     def test_student_gets_variant_and_diagram(self):
         with tempfile.TemporaryDirectory() as tmp:
             game.DB=tmp+'/t.sqlite';game.ROOMS.clear()
-            old=(game.KEY,game.TEACHER_KEY);game.KEY='k';game.TEACHER_KEY='tk'
+            old=game.TEACHER_KEY;game.TEACHER_KEY='tk'
             try:
                 svg='<svg viewBox="0 0 10 10"><circle r="3"/></svg>'
-                base={'prompt':'Base 6 V?','answer':'a','hint':'h','variants':[{'prompt':'Var 9 V?','answer':'b','hint':'h','diagram':svg}]}
+                base={'prompt':'Base 6 V?','answer':'a','choices':['x','y'],'correct':0,'variants':[{'prompt':'Var 9 V?','answer':'b','choices':['x','y'],'correct':1,'diagram':svg}]}
                 pack={'title':'T','topics':[{'name':'Circuits','questions':[base]}]}
                 c=game.dispatch('/api/create',{'mode':'coop','pack':pack,'teacherKey':'tk'})
                 seen=set()
@@ -393,32 +237,17 @@ class VariantEncounterTests(unittest.TestCase):
                     seen.add(a['prompt'])
                     if a['prompt'].startswith('Var'): self.assertEqual(a['image'], '')
                 self.assertEqual(seen,{'Base 6 V?','Var 9 V?'})
-            finally: game.KEY,game.TEACHER_KEY=old
+            finally: game.TEACHER_KEY=old
 
 
-
-class GenerateTests(unittest.TestCase):
-    def test_generate_builds_topics_in_parallel_and_survives_a_failure(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            game.DB=tmp+'/t.sqlite';game.ROOMS.clear();old=(game.KEY,game.TEACHER_KEY,game.ai);game.KEY='k';game.TEACHER_KEY='tk'
-            def fake(system,data,max_tokens=650,wait=None):
-                if 'topic' not in data: return {'title':'Circuits','topics':[{'name':'Ohm','icon':'⚡','focus':'f'},{'name':'Bad','icon':'x','focus':'f'}]}
-                if data['topic']=='Bad': raise game.GameError('boom')
-                return {'questions':[{'prompt':'Why?','answer':'Because.','hint':'h','level':'easy'}]}
-            game.ai=fake
-            try:
-                r=game.dispatch('/api/generate',{'text':'ohms law','teacherKey':'tk'})
-                self.assertEqual([t['name'] for t in r['pack']['topics']],['Ohm']);self.assertTrue(r['partial'])
-                self.assertEqual(r['pack']['topics'][0]['questions'][0]['level'],'easy')
-            finally: game.KEY,game.TEACHER_KEY,game.ai=old
 
 
 class MoreTimeTests(unittest.TestCase):
     def test_more_time_costs_a_cell(self):
         with tempfile.TemporaryDirectory() as tmp:
-            game.DB=tmp+'/t.sqlite';game.ROOMS.clear();old=(game.KEY,game.TEACHER_KEY);game.KEY='k';game.TEACHER_KEY='tk'
+            game.DB=tmp+'/t.sqlite';game.ROOMS.clear();old=game.TEACHER_KEY;game.TEACHER_KEY='tk'
             try:
-                pack={'title':'T','topics':[{'name':'A','questions':[{'prompt':'Why?','answer':'a','hint':'h'}]}]}
+                pack={'title':'T','topics':[{'name':'A','questions':[{'prompt':'Why?','answer':'a','choices':['x','y'],'correct':0}]}]}
                 c=game.dispatch('/api/create',{'mode':'coop','pack':pack,'teacherKey':'tk'})
                 j=game.dispatch('/api/join',{'code':c['code'],'name':'Ada'});auth={'code':c['code'],'token':j['token']}
                 p=game.ROOMS[c['code']]['players'][j['player']['id']];p['x'],p['y']=game.POSITIONS[0];p['cells']=0
@@ -426,4 +255,4 @@ class MoreTimeTests(unittest.TestCase):
                 with self.assertRaises(game.GameError): game.dispatch('/api/moretime',{**auth,'challenge':a['id']})
                 p['cells']=2
                 self.assertEqual(game.dispatch('/api/moretime',{**auth,'challenge':a['id']})['player']['cells'],1)
-            finally: game.KEY,game.TEACHER_KEY=old
+            finally: game.TEACHER_KEY=old

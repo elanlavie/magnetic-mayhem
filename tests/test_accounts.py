@@ -16,12 +16,11 @@ def fake_verify(credential):
 class ClassTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.old = (game.DB, game.KEY, game.TEACHER_KEY, accounts.MODE, accounts.GOOGLE_CLIENT_ID, accounts.TEACHER_EMAILS, accounts.SYNC_EMAIL, accounts.PUBLIC_URL)
-        game.DB = self.temp.name + '/t.sqlite3'; game.KEY = 'k'; game.TEACHER_KEY = ''; game.ROOMS.clear()
+        self.old = (game.DB, game.TEACHER_KEY, accounts.MODE, accounts.GOOGLE_CLIENT_ID, accounts.TEACHER_EMAILS, accounts.SYNC_EMAIL, accounts.PUBLIC_URL)
+        game.DB = self.temp.name + '/t.sqlite3'; game.TEACHER_KEY = ''; game.ROOMS.clear()
         accounts.MODE = 'classes'; accounts.GOOGLE_CLIENT_ID = 'cid'; accounts.SYNC_EMAIL = True; accounts.PUBLIC_URL = 'https://game.test'
         accounts.TEACHER_EMAILS = {'teach@wccusd.net', 'other@wccusd.net'}
-        self.patches = [patch.object(accounts, 'verify_google', side_effect=fake_verify),
-                        patch.object(game, 'ai', side_effect=lambda system, data, max_tokens=650: {'status': 'help', 'feedback': 'Tell me more. ⚡'})]
+        self.patches = [patch.object(accounts, 'verify_google', side_effect=fake_verify)]
         for p in self.patches: p.start()
         for key in ('SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'ALERT_FROM'): os.environ.pop(key, None)
         self.teacher = self.sign('teach@wccusd.net', 'Ms Teach')
@@ -32,7 +31,7 @@ class ClassTests(unittest.TestCase):
 
     def tearDown(self):
         for p in self.patches: p.stop()
-        (game.DB, game.KEY, game.TEACHER_KEY, accounts.MODE, accounts.GOOGLE_CLIENT_ID, accounts.TEACHER_EMAILS, accounts.SYNC_EMAIL, accounts.PUBLIC_URL) = self.old
+        (game.DB, game.TEACHER_KEY, accounts.MODE, accounts.GOOGLE_CLIENT_ID, accounts.TEACHER_EMAILS, accounts.SYNC_EMAIL, accounts.PUBLIC_URL) = self.old
         self.temp.cleanup()
 
     def sign(self, email, name):
@@ -90,31 +89,49 @@ class ClassTests(unittest.TestCase):
 
     def test_teacher_can_delete_a_class_and_its_data(self):
         info = self.student_in_room()
-        self.chat_with_tutor(info, 'I want to die')
+        self.chat_with_tutor(info)
         other = self.sign('other@wccusd.net', 'Other Teacher')
         with self.assertRaises(accounts.AuthError): self.api('/api/class/delete', other, classId=self.cls['id'])
         with self.assertRaises(accounts.AuthError): self.api('/api/class/delete', self.alex, classId=self.cls['id'])
         self.api('/api/class/delete', self.teacher, classId=self.cls['id'])
         self.assertEqual(self.api('/api/class/list', self.teacher)['classes'], [])
         self.assertEqual(self.api('/api/class/list', self.alex)['classes'], [])
-        self.assertEqual(self.api('/api/class/alerts', self.teacher)['alerts'], [])
         with self.assertRaises(accounts.AuthError): self.api('/api/class/join', self.sign('mia@wccschools.org', 'Mia'), code=self.invite['code'])
         with self.assertRaises(game.GameError): game.dispatch('/api/state', {'code': info['code'], 'token': info['token']})
 
     # --- private question library
-    LIB_AI = {'title': 'E&M Practice Test', 'questions': [
-        {'subject': 'Magnetism', 'prompt': 'Why does a magnet attract a nail?', 'answer': 'Domains align.', 'hint': 'Think about tiny magnets.'},
-        {'subject': 'Magnetism', 'prompt': 'What happens to a compass near a wire with current?', 'answer': 'It deflects.', 'hint': 'Current makes a field.'},
-        {'subject': 'Electricity', 'prompt': 'Why do bulbs in a series circuit dim?', 'answer': 'Shared voltage.', 'hint': 'Count the paths.'},
-        {'subject': 'Forces', 'prompt': '', 'answer': 'x', 'hint': 'x'}]}
+    LIB_TEXT = """Title: E&M Practice Test
+
+Topic: Magnetism
+1. Why does a magnet attract a nail?
+A) It has charge
+B) Its tiny domains line up
+C) Gravity
+Answer: B
+Explanation: The nail's domains align with the magnet's field.
+
+2. What does a compass do near a wire with current?
+A) Deflects
+B) Nothing
+Answer: A
+Explanation: Current makes a magnetic field.
+
+Topic: Electricity
+3. Why do bulbs in a series circuit dim?
+A) They share the voltage
+B) They are tired
+Answer: A
+Explanation: Voltage is split between them.
+
+4. A question with no answer line
+A) one
+B) two
+"""
 
     def test_library_is_private_and_builds_a_subject_only_pack(self):
-        seen = {}
-        def fake_ai(system, data, max_tokens=650): seen['system'] = system; return self.LIB_AI
-        with patch.object(game, 'ai', side_effect=fake_ai):
-            lib = game.dispatch('/api/library/import', {'userToken': self.teacher, 'text': 'MC test text'})
-        self.assertEqual((lib['title'], lib['count'], lib['subjects']), ('E&M Practice Test', 3, {'Magnetism': 2, 'Electricity': 1}))  # blank question dropped
-        self.assertIn('multiple-choice', seen['system'])
+        lib = game.dispatch('/api/library/import', {'userToken': self.teacher, 'text': self.LIB_TEXT, 'title': 'E&M Practice Test'})
+        self.assertEqual((lib['title'], lib['count'], lib['subjects']), ('E&M Practice Test', 3, {'Magnetism': 2, 'Electricity': 1}))  # the one with no answer is reported, not saved
+        self.assertTrue(lib['problems'])
         other = self.sign('other@wccusd.net', 'Other Teacher')
         self.assertEqual(game.dispatch('/api/library/list', {'userToken': other})['sets'], [])
         with self.assertRaises(accounts.AuthError): game.dispatch('/api/library/get', {'userToken': other, 'id': lib['id']})
@@ -131,12 +148,8 @@ class ClassTests(unittest.TestCase):
     def test_nicknames_are_suggested_edited_saved_and_used_in_games(self):
         member = self.api('/api/class/members', self.teacher, classId=self.cls['id'])['members'][0]
         self.assertEqual((member['nickname'], member['nickConfirmed']), ('Alexander', 0))
-        seen = {}
-        def fake_ai(system, data, max_tokens=650): seen.update(data); return {'suggestions': [{'id': 0, 'nickname': 'Alex'}]}
-        with patch.object(game, 'ai', side_effect=fake_ai):
-            result = self.api('/api/class/nicknames/suggest', self.teacher, classId=self.cls['id'])
-        self.assertEqual((result['source'], result['suggestions'][0]['suggested']), ('ai', 'Alex'))
-        self.assertNotIn('@', str(seen))  # no email addresses go to the model
+        result = self.api('/api/class/nicknames/suggest', self.teacher, classId=self.cls['id'])
+        self.assertEqual((result['source'], result['suggestions'][0]['suggested']), ('guess', 'Alexander'))
         self.assertEqual(self.api('/api/class/members', self.teacher, classId=self.cls['id'])['members'][0]['nickname'], 'Alexander')  # suggesting saves nothing
         self.api('/api/class/nicknames/save', self.teacher, classId=self.cls['id'], nicknames={'alexander.smith@wccschools.org': '  Alex <b>'})
         member = self.api('/api/class/members', self.teacher, classId=self.cls['id'])['members'][0]
@@ -147,11 +160,6 @@ class ClassTests(unittest.TestCase):
         with self.assertRaises(accounts.AuthError): self.api('/api/class/nicknames/save', self.alex, classId=self.cls['id'], nicknames={})
         self.api('/api/class/nicknames/save', self.teacher, classId=self.cls['id'], nicknames={'alexander.smith@wccschools.org': ''})
         self.assertEqual(self.api('/api/class/members', self.teacher, classId=self.cls['id'])['members'][0]['nickConfirmed'], 0)
-
-    def test_ai_failure_falls_back_to_name_guesses(self):
-        with patch.object(game, 'ai', side_effect=game.GameError('down')):
-            result = self.api('/api/class/nicknames/suggest', self.teacher, classId=self.cls['id'])
-        self.assertEqual((result['source'], result['suggestions'][0]['suggested']), ('guess', 'Alexander'))
 
     def test_each_game_chooses_nicknames_or_anonymous_fun_names(self):
         self.api('/api/class/nicknames/save', self.teacher, classId=self.cls['id'], nicknames={'alexander.smith@wccschools.org': 'Alex'})
@@ -178,8 +186,8 @@ class ClassTests(unittest.TestCase):
         with self.assertRaises(accounts.AuthError): game.dispatch('/api/create', {'userToken': self.alex, 'classId': self.cls['id'], 'mode': 'coop', 'pack': copy.deepcopy(game.BUILTIN)})
 
     def test_teacher_tools_need_teacher_session(self):
-        with self.assertRaises(accounts.AuthError): game.dispatch('/api/generate', {'text': 'magnets'})
-        with self.assertRaises(accounts.AuthError): game.dispatch('/api/generate', {'userToken': self.alex, 'text': 'magnets'})
+        with self.assertRaises(accounts.AuthError): game.dispatch('/api/parse', {'text': 'magnets'})
+        with self.assertRaises(accounts.AuthError): game.dispatch('/api/parse', {'userToken': self.alex, 'text': 'magnets'})
 
     def test_bot_practice_bots_do_not_inherit_the_students_identity(self):
         with self.assertRaises(game.GameError): game.dispatch('/api/create', {'userToken': self.alex, 'classId': self.cls['id'], 'mode': 'impostorSolo', 'soloRole': 'crew', 'pack': copy.deepcopy(game.BUILTIN)})  # students cannot bring their own questions
@@ -195,114 +203,34 @@ class ClassTests(unittest.TestCase):
         accounts.MODE = 'off'
         self.assertTrue(game.dispatch('/api/config', {})['builtin'])  # the open demo keeps its sample
 
-    def test_teacher_ai_helper_is_teacher_only_and_needs_a_message(self):
-        with patch.object(game, 'ai', side_effect=lambda s, d, m=650: {'reply': 'Which topics?'}) as fake:
-            r = game.dispatch('/api/assist', {'userToken': self.teacher, 'messages': [{'role': 'user', 'text': 'magnetism'}]})
-            self.assertEqual(r['reply'], 'Which topics?')
-            self.assertEqual(fake.call_args[0][1]['conversation'][0]['role'], 'teacher')
-            with self.assertRaises(accounts.AuthError): game.dispatch('/api/assist', {'userToken': self.alex, 'messages': [{'role': 'user', 'text': 'hi'}]})
-            with self.assertRaises(game.GameError): game.dispatch('/api/assist', {'userToken': self.teacher, 'messages': []})
-
-    def test_context_helper_drafts_for_teachers_only_and_context_is_saved_with_the_game(self):
-        draft = {'reply': 'Here is a draft.', 'context': 'Use everyday examples.\nDo not give answers away.'}
-        with patch.object(game, 'ai', side_effect=lambda s, d, m=650: draft) as fake:
-            r = game.dispatch('/api/context/assist', {'userToken': self.teacher, 'messages': [], 'material': 'Magnetism unit', 'grade': '9th grade'})
-            self.assertEqual(r['context'], 'Use everyday examples.\nDo not give answers away.')
-            self.assertEqual(fake.call_args[0][1]['conversation'][0]['text'], 'Draft the tutor context for my class.')
-            self.assertEqual(fake.call_args[0][1]['curriculum_material'], 'Magnetism unit')
-            with self.assertRaises(accounts.AuthError): game.dispatch('/api/context/assist', {'userToken': self.alex, 'messages': [{'role': 'user', 'text': 'hi'}]})
-            with self.assertRaises(game.GameError): game.dispatch('/api/context/assist', {'userToken': self.teacher, 'messages': []})
-        topics = [{'name': 'R', 'icon': 'x', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'hint': 'h'}]}]
-        self.api('/api/pack/save', self.teacher, pack={'title': 'With notes', 'topics': topics, 'context': 'Keep replies short.'})
-        info = self.api('/api/pack/list', self.teacher)['packs'][0]['info']
-        self.assertTrue(info['hasContext']); self.assertEqual(info['contextPreview'], 'Keep replies short.')
-
     def test_classes_are_off_unless_enabled(self):
         accounts.MODE = 'off'
         with self.assertRaises(game.GameError): game.dispatch('/api/class/list', {})
 
     # --- transcripts and safety
-    def chat_with_tutor(self, token_info, text, ai=None):
+    def pick(self, auth, a, right=True):
+        """Choose the right (or a wrong) button for the shuffled question on screen."""
+        q = game.ROOMS[auth['code']]['pack']['topics'][a['topic']]['questions'][a['index']]
+        idx = a['perm'].index(q['correct']); return idx if right else (idx + 1) % len(a['perm'])
+
+    def answer(self, auth, right=True):
+        a = game.get(auth)[1]['active']
+        return game.dispatch('/api/chat', {**auth, 'challenge': a['id'], 'requestId': str(uuid.uuid4()), 'choice': self.pick(auth, a, right)})
+
+    def chat_with_tutor(self, token_info, text=None, ai=None):
         p = game.ROOMS[token_info['code']]['players'][token_info['player']]
         p['x'], p['y'] = game.POSITIONS[0]
         auth = {'code': token_info['code'], 'token': token_info['token']}
-        a = game.dispatch('/api/start', {**auth, 'topic': 0})['player']['active']
-        call = lambda: game.dispatch('/api/chat', {**auth, 'challenge': a['id'], 'requestId': str(uuid.uuid4()), 'kind': 'answer', 'text': text})
-        if ai:
-            with patch.object(game, 'ai', side_effect=ai): return call()
-        return call()
+        game.dispatch('/api/start', {**auth, 'topic': 0})
+        return self.answer(auth)
 
     def student_in_room(self):
         room = self.make_room(autoNames=False); j = self.join(self.alex, room['code'])
         return {'code': room['code'], 'token': j['token'], 'player': j['player']['id']}
 
-    def test_chats_are_logged_for_the_teacher_even_when_the_tutor_fails(self):
-        info = self.student_in_room()
-        self.chat_with_tutor(info, 'Magnets attract because of domains')
-        def broken(system, data, max_tokens=650): raise game.GameError('The tutor could not respond.')
-        with self.assertRaises(game.GameError): self.chat_with_tutor(info, 'my second try', ai=broken)
-        convo = self.api('/api/class/transcript', self.teacher, classId=self.cls['id'], email='alexander.smith@wccschools.org')['conversations']
-        roles = [(m['role'], m['text']) for c in convo for m in c['messages']]
-        self.assertEqual(roles[0], ('student', 'Magnets attract because of domains')); self.assertEqual(roles[1][0], 'tutor')
-        self.assertIn(('student', 'my second try'), roles)
-        members = self.api('/api/class/members', self.teacher, classId=self.cls['id'])['members']
-        self.assertEqual(members[0]['messages'], 2)
-
-    def test_concerning_message_creates_alert_with_honest_delivery_status(self):
-        info = self.student_in_room()
-        self.chat_with_tutor(info, 'honestly I want to kill myself')
-        alert = self.api('/api/class/alerts', self.teacher)['alerts'][0]
-        self.assertEqual((alert['category'], alert['status']), ('self_harm', 'not_configured'))  # no SMTP: says so, never "sent"
-        self.chat_with_tutor(info, 'I want to kill myself again')
-        self.assertEqual(len(self.api('/api/class/alerts', self.teacher)['alerts']), 1)  # same student and category are grouped
-        detail = self.api('/api/class/alert', self.teacher, alertId=alert['id'])
-        self.assertEqual(detail['messages'][0]['flag'], 'self_harm')
-        other = self.sign('other@wccusd.net', 'Other')
-        with self.assertRaises(accounts.AuthError): self.api('/api/class/alert', other, alertId=alert['id'])
-        self.api('/api/class/alert/review', self.teacher, alertId=alert['id'])
-        self.assertEqual(self.api('/api/class/alerts', self.teacher)['alerts'][0]['reviewed'], 1)
-
-    def test_science_talk_is_not_flagged_but_ai_classification_is(self):
-        info = self.student_in_room()
-        self.chat_with_tutor(info, 'you can kill the current by opening the switch')
-        self.assertEqual(self.api('/api/class/alerts', self.teacher)['alerts'], [])
-        self.chat_with_tutor(info, 'something the keyword list misses', ai=lambda s, d, m=650: {'status': 'help', 'feedback': 'Let us talk to your teacher.', 'safety': 'harm_to_others'})
-        self.assertEqual(self.api('/api/class/alerts', self.teacher)['alerts'][0]['category'], 'harm_to_others')
-
-    def test_alert_email_links_to_dashboard_without_message_text(self):
-        sent = []
-        class FakeSMTP:
-            def __init__(self, host, port, timeout=0): sent.append(('connect', host, port))
-            def starttls(self, context=None): pass
-            def login(self, user, password): sent.append(('login', user))
-            def send_message(self, msg): sent.append(('mail', msg))
-            def __enter__(self): return self
-            def __exit__(self, *a): return False
-        os.environ.update(SMTP_HOST='smtp.test', SMTP_USER='alerts@school.test', SMTP_PASSWORD='s3cret', ALERT_FROM='alerts@school.test')
-        info = self.student_in_room()
-        with patch('accounts.smtplib.SMTP', FakeSMTP):
-            self.chat_with_tutor(info, 'I wanna die and also my secret detail')
-        msg = next(x[1] for x in sent if x[0] == 'mail')
-        body = msg.get_content(); alert = self.api('/api/class/alerts', self.teacher)['alerts'][0]
-        self.assertEqual(msg['To'], 'teach@wccusd.net'); self.assertIn(f'https://game.test/?alert={alert["id"]}', body)
-        self.assertNotIn('secret detail', body); self.assertEqual(alert['status'], 'sent')
-
-    def test_failed_email_is_reported_without_leaking_credentials(self):
-        class Broken:
-            def __init__(self, *a, **k): raise OSError('connection refused for s3cret')
-        os.environ.update(SMTP_HOST='smtp.test', SMTP_USER='u', SMTP_PASSWORD='s3cret')
-        info = self.student_in_room()
-        with patch('accounts.smtplib.SMTP', Broken):
-            self.chat_with_tutor(info, 'I want to die')
-        alert = self.api('/api/class/alerts', self.teacher)['alerts'][0]
-        self.assertEqual(alert['status'], 'failed'); self.assertNotIn('s3cret', alert['detail'])
-        with patch.object(accounts, 'send_alert') as retry:
-            self.api('/api/class/alert/retry', self.teacher, alertId=alert['id']); retry.assert_called_once()
-
-
     def test_saved_game_summary_counts_rooms_not_every_question(self):
         # 3 rooms with 4 questions each: students answer 3 questions, so the list says 3, not 12
-        topics = [{'name': f'Room {i}', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'hint': 'h'}] * 4} for i in range(3)]
+        topics = [{'name': f'Room {i}', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'choices': ['x', 'y'], 'correct': 0}] * 4} for i in range(3)]
         saved = self.api('/api/pack/save', self.teacher, pack={'title': 'Magnets', 'grade': '9th grade', 'format': {'mc': True, 'free': False}, 'topics': topics,
                          'settings': {'mode': 'infiltration', 'roundSeconds': 600, 'followup': 20, 'bogus': 1}})
         p = self.api('/api/pack/list', self.teacher)['packs'][0]
@@ -313,15 +241,12 @@ class ClassTests(unittest.TestCase):
         # re-saving without settings (a rebuilt question set) keeps the saved ones
         self.api('/api/pack/save', self.teacher, pack={'title': 'Magnets', 'topics': topics}, id=saved['id'])
         self.assertEqual(self.api('/api/pack/get', self.teacher, id=saved['id'])['pack']['settings']['mode'], 'infiltration')
-        # free response takes a minute; settings never reach students in a live room
-        free = self.api('/api/pack/save', self.teacher, pack={'title': 'Free', 'topics': topics[:1]})
-        info = {x['id']: x['info'] for x in self.api('/api/pack/list', self.teacher)['packs']}[free['id']]
-        self.assertEqual((info['answer'], info['answerSeconds'], info['hasSettings']), ('free', 60, False))
+        # settings never reach students in a live room
         room = self.api('/api/create', self.teacher, classId=self.cls['id'], mode='coop', pack=self.api('/api/pack/get', self.teacher, id=saved['id'])['pack'])
         self.assertNotIn('settings', game.ROOMS[room['code']]['pack'])
 
     def test_unlimited_time_is_saved_and_reaches_the_room(self):
-        pack = {'title': 'Calm', 'topics': [{'name': 'Room', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'hint': 'h'}]}], 'settings': {'unlimited': True}}
+        pack = {'title': 'Calm', 'topics': [{'name': 'Room', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'choices': ['x', 'y'], 'correct': 0}]}], 'settings': {'unlimited': True}}
         saved = self.api('/api/pack/save', self.teacher, pack=pack)
         self.assertEqual(self.api('/api/pack/list', self.teacher)['packs'][0]['info']['answerSeconds'], 0)
         room = self.api('/api/create', self.teacher, classId=self.cls['id'], mode='coop', unlimited=True, pack=self.api('/api/pack/get', self.teacher, id=saved['id'])['pack'])
@@ -333,7 +258,7 @@ class ClassTests(unittest.TestCase):
         a = self.api('/api/folder/create', self.teacher, name='  Physics  ')
         self.assertEqual(a['name'], 'Physics')
         b = self.api('/api/folder/create', self.teacher, name='Magnetism', parent=a['id'])
-        pack = {'title': 'Circuits', 'topics': [{'name': 'Ohm', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'hint': 'h'}]}]}
+        pack = {'title': 'Circuits', 'topics': [{'name': 'Ohm', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'choices': ['x', 'y'], 'correct': 0}]}]}
         g = self.api('/api/pack/save', self.teacher, pack=pack, folder=b['id'])  # new games land in the folder being viewed
         listed = self.api('/api/pack/list', self.teacher)
         self.assertEqual(listed['packs'][0]['folder'], b['id'])
@@ -362,7 +287,7 @@ class ClassTests(unittest.TestCase):
         self.assertNotIn(a['id'], [f['id'] for f in self.api('/api/pack/list', self.teacher)['folders']])
 
     def test_saved_packs_are_reusable_and_assignable(self):
-        pack = {'title': 'Circuits', 'topics': [{'name': 'Ohm', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'hint': 'h'}]}]}
+        pack = {'title': 'Circuits', 'topics': [{'name': 'Ohm', 'questions': [{'prompt': 'Why?', 'answer': 'a', 'choices': ['x', 'y'], 'correct': 0}]}]}
         saved = self.api('/api/pack/save', self.teacher, pack=pack)
         listed = self.api('/api/pack/list', self.teacher)['packs']
         self.assertEqual([p['title'] for p in listed], ['Circuits']);self.assertEqual(listed[0]['questions'], 1)
@@ -400,17 +325,10 @@ class ClassTests(unittest.TestCase):
         joined = game.dispatch('/api/join', {'userToken': self.alex, 'code': made['code']})
         auth = {'userToken': self.alex, 'code': made['code'], 'token': joined['token']}
         self.assertEqual(game.ROOMS[made['code']]['gameType'], 'chat')
-        def answer(status, repair=False):
-            snap = game.dispatch('/api/start', auth); a = snap['player']['active']
-            if repair: game.get(auth)[1]['active']['repair'] = True
-            with patch.object(game, 'ai', side_effect=lambda *x, **k: {'status': status, 'feedback': 'ok', 'safety': 'none'}):
-                return game.dispatch('/api/chat', {**auth, 'challenge': a['id'], 'requestId': str(uuid.uuid4()), 'kind': 'answer', 'text': 'because of the field'})
         done = lambda: game.dispatch('/api/hw/list', {'userToken': self.alex})['assignments'][0]['done']
-        answer('incorrect'); self.assertEqual(done(), 0)
+        game.dispatch('/api/start', auth); self.answer(auth, right=False); self.assertEqual(done(), 0)  # a miss earns nothing
         game.get(auth)[1]['active'] = None
-        snap = answer('correct', repair=True); self.assertEqual(done(), 0)  # needed the worked answer: no credit
-        game.get(auth)[1]['active'] = None
-        snap = answer('correct'); self.assertEqual(done(), 1); self.assertEqual(snap['player']['hw']['done'], 1)
+        game.dispatch('/api/start', auth); snap = self.answer(auth); self.assertEqual(done(), 1); self.assertEqual(snap['player']['hw']['done'], 1)
         game.get(auth)[1]['active'] = None
         rep = self.api('/api/hw/report', self.teacher, id=hw['id'])
         self.assertEqual((rep['students'][0]['done'], rep['total']), (1, total))
@@ -429,36 +347,6 @@ class ClassTests(unittest.TestCase):
         with self.assertRaises(accounts.AuthError): game.dispatch('/api/create', {'userToken': self.alex, 'assignmentId': hw['id']})
         self.api('/api/hw/delete', self.teacher, id=hw['id'])
         self.assertEqual(self.api('/api/hw/list', self.teacher)['assignments'], [])
-
-    def test_homework_chat_is_visible_to_the_teacher_and_safety_alerts_still_fire(self):
-        pid = self.api('/api/pack/save', self.teacher, pack=copy.deepcopy(game.BUILTIN))['id']
-        hw = self.api('/api/hw/create', self.teacher, classId=self.cls['id'], packId=pid)
-        made = game.dispatch('/api/create', {'userToken': self.alex, 'assignmentId': hw['id'], 'gameType': 'chat'})
-        joined = game.dispatch('/api/join', {'userToken': self.alex, 'code': made['code']})
-        auth = {'userToken': self.alex, 'code': made['code'], 'token': joined['token']}
-        a = game.dispatch('/api/start', auth)['player']['active']
-        text = 'honestly i want to kill myself ' + 'x' * 120
-        game.dispatch('/api/chat', {**auth, 'challenge': a['id'], 'requestId': str(uuid.uuid4()), 'kind': 'answer', 'text': text, 'pasted': 140})
-        convo = self.api('/api/class/transcript', self.teacher, classId=self.cls['id'], email='alexander.smith@wccschools.org')['conversations']
-        flags = {m['flag'] for g in convo for m in g['messages'] if m['role'] == 'student'}
-        self.assertTrue(flags & set(accounts.CATEGORIES))
-        self.assertEqual(len(self.api('/api/class/alerts', self.teacher)['alerts']), 1)
-
-    def test_pasted_homework_answers_are_flagged_and_earn_no_credit(self):
-        pid = self.api('/api/pack/save', self.teacher, pack=copy.deepcopy(game.BUILTIN))['id']
-        hw = self.api('/api/hw/create', self.teacher, classId=self.cls['id'], packId=pid)
-        made = game.dispatch('/api/create', {'userToken': self.alex, 'assignmentId': hw['id'], 'gameType': 'chat'})
-        joined = game.dispatch('/api/join', {'userToken': self.alex, 'code': made['code']})
-        auth = {'userToken': self.alex, 'code': made['code'], 'token': joined['token']}
-        text = 'Magnets have poles and the field lines run from north to south so unlike poles attract each other strongly. ' * 2
-        def go(pasted):
-            a = game.dispatch('/api/start', auth)['player']['active']
-            with patch.object(game, 'ai', side_effect=lambda *x, **k: {'status': 'correct', 'feedback': 'Great', 'safety': 'none'}):
-                game.dispatch('/api/chat', {**auth, 'challenge': a['id'], 'requestId': str(uuid.uuid4()), 'kind': 'answer', 'text': text, 'pasted': pasted})
-            game.get(auth)[1]['active'] = None
-        go(len(text)); self.assertEqual(self.api('/api/hw/list', self.alex)['assignments'][0]['done'], 0)
-        rep = self.api('/api/hw/report', self.teacher, id=hw['id'])['students'][0]; self.assertEqual(rep['pasted'], 1)
-        go(10); self.assertEqual(self.api('/api/hw/list', self.alex)['assignments'][0]['done'], 1)  # a few pasted words are fine
 
     def test_homework_imposter_practice_asks_questions_without_credit(self):
         pid = self.api('/api/pack/save', self.teacher, pack=copy.deepcopy(game.BUILTIN))['id']
