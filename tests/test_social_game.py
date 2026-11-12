@@ -29,6 +29,41 @@ class SocialTests(unittest.TestCase):
         self.assertNotIn('votes',json.dumps(snapshot['room']['game']))
         m=self.open_meeting();self.act(self.imp,'vote',meeting=m,target=self.crew[0]['id']);snap=game.dispatch('/api/state',self.auth[self.crew[1]['id']]);self.assertIsNone(snap['player']['yourVote']);self.assertNotIn('votes',snap['room']['game']['meeting'])
         self.assertEqual(snap['room']['game']['meeting']['voted'],[self.imp['id']])
+    def test_counts_cover_living_and_ghosts_without_naming_roles(self):
+        c=social.public(self.room)['counts'];self.assertEqual((c['crewAlive'],c['impostorsAlive'],c['crewGhosts'],c['impostorGhosts']),(3,1,0,0))
+        self.crew[0]['pendingTag']={'at':0,'by':self.imp['id']};self.land();c=social.public(self.room)['counts']
+        self.assertEqual((c['crewAlive'],c['crewGhosts']),(2,1));self.assertEqual(social.public(self.room)['crewPenalty'],1)
+    def test_room_lock_needs_charge_players_and_blocks_new_chats_only(self):
+        with self.assertRaises(game.GameError):self.act(self.imp,'lock',topic=0)   # too few players
+        self.g['sabotageOn']=True
+        with self.assertRaises(game.GameError):self.act(self.imp,'lock',topic=0)   # no charge yet
+        for _ in range(3):social.conversation_completed(self.room,self.imp,'0:0')
+        self.assertEqual(self.imp['sabCharge'],3)
+        with self.assertRaises(game.GameError):self.act(self.crew[0],'lock',topic=0)
+        self.act(self.imp,'lock',topic=0);self.assertIn('0',social.public(self.room)['locks']);self.assertEqual(self.imp['sabCharge'],0)
+        with self.assertRaises(game.GameError):self.act(self.imp,'lock',topic=1)   # recharging
+        c=self.crew[0];c.update(x=game.POSITIONS[0][0],y=game.POSITIONS[0][1])
+        with self.assertRaises(game.GameError):game.dispatch('/api/start',{**self.auth[c['id']],'topic':0})
+        c['active']={'topic':0};   # someone already in a chat cannot unlock, and is never pulled out
+        with self.assertRaises(game.GameError):self.act(c,'fix',topic=0)
+        c['active']=None;self.crew[1].update(x=1,y=1)
+        with self.assertRaises(game.GameError):self.act(self.crew[1],'fix',topic=0)   # too far away
+        self.act(c,'fix',topic=0);self.assertEqual(social.public(self.room)['locks'],{})
+    def test_locks_expire(self):
+        self.g['locks']['2']={'until':time.time()-1};social.advance(self.room);self.assertEqual(self.g['locks'],{})
+    def test_best_explanation_candidates_are_deduplicated_and_short_ones_skipped(self):
+        c=self.crew[0];social.note_explanation(self.room,c,0,'Why?','too short');self.assertEqual(self.g['candidates'],[])
+        long='Because the magnetic field spreads out in every direction, so it is weaker far away.'
+        social.note_explanation(self.room,c,0,'Why?',long);social.note_explanation(self.room,c,0,'Why?',long+' again');self.assertEqual(len(self.g['candidates']),1)
+    def test_finished_round_is_recorded_for_the_balance_page(self):
+        import accounts
+        seen=[];old=social.RECORDER;social.RECORDER=seen.append
+        try:social.finish(self.room,'crew','All imposters were voted out. 🛰️')
+        finally:social.RECORDER=old
+        self.assertEqual(seen[0]['how'],'vote');self.assertEqual(seen[0]['players'],4)
+        accounts.record_round(game.DB,{**seen[0]});u={'email':'t@x.org','role':'teacher'}
+        b=accounts.balance(game.DB,u);self.assertEqual(b['all']['rounds'],1);self.assertEqual(b['all']['crewRate'],100)
+        with self.assertRaises(Exception):accounts.balance(game.DB,{'email':'s@x.org','role':'student'})
     def test_crew_cannot_tag_and_sabotage_is_gone(self):
         for action in ('tag','sabotage','stabilize'):
             with self.assertRaises(game.GameError):self.act(self.crew[0],action,target=self.crew[1]['id'])

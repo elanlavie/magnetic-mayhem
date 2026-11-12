@@ -327,3 +327,12 @@ body.in-game #game{padding-top:8px;padding-bottom:8px}
 .launch-summary.bad{border-color:#e48a8a}.launch-summary .warn{color:#ffb4b4;font-size:14px}
 #savedbox{width:100%;margin:0 0 18px}
 #setup #savedbox .saved-row{width:100%}
+.counts-row{display:flex;flex-wrap:wrap;gap:6px 10px;margin:6px 0;font-size:12px}
+.counts-row span{padding:3px 10px;border-radius:999px;background:#ffffff10;border:1px solid var(--line)}.counts-row b{margin-left:3px;font-size:14px}
+.penalty-note{flex:1 1 100%;font-size:11px;color:#ffb4b4}
+.lock-pick{display:flex;flex-direction:column;gap:6px;width:100%}.lock-pick select{width:100%}
+.best-explain{margin:14px 0;padding:12px 14px;border-radius:12px;border:1px solid #ffd666;background:#ffd66614}.best-explain h3{margin:0 0 4px}.best-explain blockquote{margin:8px 0;padding-left:12px;border-left:3px solid #ffd666;font-size:15px}
+#game .mission-side .round-actions{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+#game .mission-side .round-actions button{width:100%}
+#game .mission-side .lock-pick{flex-direction:row;align-items:stretch}#game .mission-side .lock-pick select{width:40%;flex:none;padding:6px}#game .mission-side .lock-pick button{flex:1;font-size:12px;padding:6px 8px}
+table.balance{width:100%;border-collapse:collapse;font-size:13px}table.balance th,table.balance td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}.table-wrap{overflow-x:auto}

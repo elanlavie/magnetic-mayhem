@@ -58,6 +58,7 @@ create table if not exists invites (code text primary key, class_id text, expire
 create table if not exists messages (id integer primary key autoincrement, class_id text, room text, email text, name text, qid text, topic text, role text, text text, ts real, flag text);
 create table if not exists packs (id text primary key, teacher text, title text, created real, data text, classes text default '[]');
 create table if not exists folders (id text primary key, teacher text, name text, parent text default '', created real);
+create table if not exists rounds (id integer primary key autoincrement, at real, code text, winner text, how text, players integer, impostors integer, seconds integer, tags integer, meetings integer, ejected integer, done integer, total integer, target integer, practice integer, meeting_seconds integer, round_seconds integer);
 create table if not exists library (id text primary key, teacher text, title text, created real, questions text);
 create table if not exists alerts (id text primary key, class_id text, teacher text, student_email text, student_name text, category text, message_id integer, created real, status text, detail text, reviewed integer default 0);
 create index if not exists messages_student on messages (class_id, email, id);
@@ -935,6 +936,33 @@ def library_pack(db, user, lib_ids, subjects, title=None, per_station=4):
 
 # ---------------------------------------------------------------- routing
 
+def record_round(db, r):
+    """Store one finished round's result so the teacher balance page can show who is winning."""
+    with tx(db) as c:
+        c.execute('insert into rounds (at,code,winner,how,players,impostors,seconds,tags,meetings,ejected,done,total,target,practice,meeting_seconds,round_seconds) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                  (time.time(), r.get('code',''), r.get('winner',''), r.get('how',''), r.get('players',0), r.get('impostors',0), r.get('seconds',0), r.get('tags',0), r.get('meetings',0), r.get('ejected',0), r.get('done',0), r.get('total',0), r.get('target',0), 1 if r.get('practice') else 0, r.get('meetingSeconds',0), r.get('roundSeconds',0)))
+
+
+def balance(db, user):
+    """Win rates and averages across finished rounds, for the teacher only. Practice rounds against computer players are left out."""
+    need_teacher(user)
+    with tx(db) as c:
+        rows = [dict(x) for x in c.execute('select * from rounds where practice=0 order by at desc limit 500')]
+    def pack(rs):
+        n = len(rs)
+        if not n:
+            return {'rounds': 0}
+        crew = sum(1 for x in rs if x['winner'] == 'crew')
+        how = {}
+        for x in rs:
+            how[x['how']] = how.get(x['how'], 0) + 1
+        avg = lambda k: round(sum(x[k] for x in rs) / n, 1)
+        return {'rounds': n, 'crewWins': crew, 'impostorWins': n - crew, 'crewRate': round(100 * crew / n), 'avgSeconds': round(sum(x['seconds'] for x in rs) / n), 'avgTags': avg('tags'), 'avgMeetings': avg('meetings'), 'avgImpostors': avg('impostors'), 'ended': how}
+    buckets = [('Up to 8 players', 0, 8), ('9 to 15 players', 9, 15), ('16 to 24 players', 16, 24), ('25 or more players', 25, 999)]
+    return {'all': pack(rows), 'bySize': [{'label': l, **pack([x for x in rows if lo <= x['players'] <= hi])} for l, lo, hi in buckets],
+            'recent': [{k: x[k] for k in ('at', 'players', 'impostors', 'winner', 'how', 'seconds', 'tags', 'meetings', 'done', 'target')} for x in rows[:15]]}
+
+
 def dispatch(db, path, d, ask=None):
     if path == '/api/auth/google':
         return sign_in(db, str(d.get('credential', '')))
@@ -944,6 +972,8 @@ def dispatch(db, path, d, ask=None):
     user = user_for(db, d)
     if path == '/api/auth/me':
         return {'user': user, 'classes': class_list(db, user)}
+    if path == '/api/balance':
+        return balance(db, user)
     if path == '/api/class/create':
         return class_create(db, user, d.get('name'), d.get('domains') or DEFAULT_STUDENT_DOMAINS)
     if path == '/api/class/list':
