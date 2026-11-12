@@ -86,11 +86,11 @@ const Classes=(()=>{
  async function roster(classId){
   const cls=classes.find(c=>c.id===classId);let members;try{members=(await call('/api/class/members',{classId})).members}catch(e){return toast(e.message)}
   const el=overlay('classes-view',`<button class="back" id="back">← Classes</button><div class="eyebrow">${esc(cls?.name||'')}</div><h2>Students &amp; nicknames</h2><p>Nicknames are what students are called in games when you choose “class nicknames.” Edit them, then save. Future sign-ins use your saved names.</p>
-  <div class="toolbar"><button id="suggest" class="small">✨ Suggest nicknames (AI)</button><button id="savenick" class="primary small">Save nicknames</button><span id="nick-note" class="muted"></span></div>
+  <div class="toolbar"><button id="suggest" class="small">✨ Suggest nicknames</button><button id="savenick" class="primary small">Save nicknames</button><span id="nick-note" class="muted"></span></div>
   <div class="roster-table">${members.map(m=>`<div class="rrow ${m.removed?'removed':''}" data-email="${esc(m.email)}"><div><strong>${esc(m.name)}</strong><div class="muted">${esc(m.email)}</div></div><input class="nick" aria-label="Nickname for ${esc(m.name)}" value="${esc(m.nickname||'')}" maxlength="24" ${m.removed?'disabled':''}><span class="muted">${m.nickConfirmed?'✓ saved':'guess'}</span><span class="muted">${m.messages} msgs${m.flagged?` · <b class="flag">${m.flagged} flagged</b>`:''}<br>last: ${fmt(m.lastActive)}</span><span class="toolbar"><button class="small" data-t="${esc(m.email)}">💬 Chats</button><button class="small ${m.removed?'':'danger'}" data-r="${esc(m.email)}" data-removed="${m.removed?1:0}">${m.removed?'Restore':'Remove'}</button></span></div>`).join('')||'<p>No students yet. Share the invite link from the class list.</p>'}</div>`,{wide:true});
   el.querySelector('#back').onclick=teacherHome;
   const note=el.querySelector('#nick-note');
-  el.querySelector('#suggest').onclick=async()=>{note.textContent='Thinking…';try{const r=await call('/api/class/nicknames/suggest',{classId});r.suggestions.forEach(s=>{const inp=el.querySelector(`.rrow[data-email="${CSS.escape(s.email)}"] .nick`);if(inp&&!inp.disabled)inp.value=s.suggested});note.textContent=(r.source==='ai'?'AI suggestions filled in.':'AI unavailable; used simple name guesses.')+' Review, edit, then save.'}catch(e){note.textContent='';toast(e.message)}};
+  el.querySelector('#suggest').onclick=async()=>{note.textContent='Thinking…';try{const r=await call('/api/class/nicknames/suggest',{classId});r.suggestions.forEach(s=>{const inp=el.querySelector(`.rrow[data-email="${CSS.escape(s.email)}"] .nick`);if(inp&&!inp.disabled)inp.value=s.suggested});note.textContent=(r.source==='ai'?'Suggestions filled in.':'Suggestions unavailable; used simple name guesses.')+' Review, edit, then save.'}catch(e){note.textContent='';toast(e.message)}};
   el.querySelector('#savenick').onclick=async()=>{const map={};el.querySelectorAll('.rrow:not(.removed)').forEach(r=>map[r.dataset.email]=r.querySelector('.nick').value);try{await call('/api/class/nicknames/save',{classId,nicknames:map});toast('Nicknames saved for this class.');roster(classId)}catch(e){toast(e.message)}};
   el.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>transcript(classId,b.dataset.t,members.find(m=>m.email===b.dataset.t)?.name));
   el.querySelectorAll('[data-r]').forEach(b=>b.onclick=async()=>{const removed=b.dataset.removed==='1';if(!removed&&!confirm('Remove this student from the class? They lose access to class games until restored.'))return;try{await call(removed?'/api/class/restore':'/api/class/remove',{classId,email:b.dataset.r});roster(classId)}catch(e){toast(e.message)}});
@@ -196,7 +196,7 @@ const Classes=(()=>{
     else{note.textContent='Reading file…';const bytes=new Uint8Array(await f.arrayBuffer());let bin='';for(let i=0;i<bytes.length;i+=8192)bin+=String.fromCharCode(...bytes.slice(i,i+8192));const r=await call('/api/extract',{name:f.name,data:btoa(bin)});document.getElementById('lib-text').value=r.text}
     note.textContent='File read. Click "Add to my library".'}catch(err){note.textContent='';toast(err.message)}e.target.value=''};
   document.getElementById('lib-import').onclick=async()=>{
-   const b=document.getElementById('lib-import'),note=document.getElementById('lib-note');b.disabled=true;note.textContent='Reading questions with AI… this can take a minute.';
+   const b=document.getElementById('lib-import'),note=document.getElementById('lib-note');b.disabled=true;note.textContent='Reading questions… this can take a minute.';
    try{const s=await call('/api/library/import',{text:document.getElementById('lib-text').value});document.getElementById('lib-text').value='';note.textContent=`Added "${s.title}" with ${s.count} questions.`;await libLoad()}
    catch(e){note.textContent='';toast(e.message)}finally{b.disabled=false}};
   libLoad();
@@ -221,13 +221,13 @@ const Classes=(()=>{
   const topics=document.getElementById('topics');
   document.getElementById('upload').closest('.toolbar').insertAdjacentHTML('afterbegin','<button type="button" id="dict-topics" class="small" title="Speak your content. Chrome sends dictation audio to Google for transcription.">🎤 Dictate</button>');
   dictation(document.getElementById('dict-topics'),topics);
-  document.getElementById('step-answer').insertAdjacentHTML('beforebegin',`<details id="assist-box" class="lib-box"><summary>💬 Not sure what to cover? Talk it through with the AI helper <span class="muted">(optional)</span></summary>
+  document.getElementById('step-answer').insertAdjacentHTML('beforebegin',`<details id="assist-box" class="lib-box"><summary>💬 Not sure what to cover? Talk it through with the helper <span class="muted">(optional)</span></summary>
    <p class="hint-text">Describe what you are teaching. The helper asks questions and suggests topics, simulations and images. Whatever you discuss here is used automatically when you click Generate questions.</p>
    <div id="assist-log" class="chatlog" aria-live="polite" style="max-height:260px"></div>
    <textarea id="assist-input" rows="2" placeholder="For example: I teach ecosystems to 9th graders. We covered food chains and energy flow, and I want them to explain why the loss of one species ripples through the web."></textarea>
    <div class="toolbar"><button type="button" id="dict-assist" class="small">🎤 Dictate</button><button type="button" id="assist-send" class="primary small">Ask the helper</button></div></details>`);
   const log=document.getElementById('assist-log'),input=document.getElementById('assist-input'),msgs=[];
-  const draw=()=>{log.innerHTML=msgs.map(m=>`<div class="bubble ${m.role==='user'?'user':''}"><small>${m.role==='user'?'YOU':'AI HELPER'}</small>${esc(m.text)}</div>`).join('');log.scrollTop=log.scrollHeight};
+  const draw=()=>{log.innerHTML=msgs.map(m=>`<div class="bubble ${m.role==='user'?'user':''}"><small>${m.role==='user'?'YOU':'HELPER'}</small>${esc(m.text)}</div>`).join('');log.scrollTop=log.scrollHeight};
   dictation(document.getElementById('dict-assist'),input);
   const send=async()=>{const text=input.value.trim();if(!text)return;msgs.push({role:'user',text});input.value='';draw();const b=document.getElementById('assist-send');b.disabled=true;
    try{const r=await call('/api/assist',{messages:msgs,material:document.getElementById('topics').value});msgs.push({role:'assistant',text:r.reply})}catch(e){toast(e.message);msgs.pop();input.value=text}finally{b.disabled=false;draw()}};
@@ -236,20 +236,20 @@ const Classes=(()=>{
  }
 
 
- // ---------- tutor context: the teacher's standing notes to the chatbot, with dictation and an AI drafting helper
+ // ---------- tutor context: the teacher's standing notes to the chatbot, with dictation and a drafting helper
  function contextMount(){
   const box=document.getElementById('tutor-context');if(!box||document.getElementById('ctx-assist'))return;
   document.getElementById('ctx-tools').classList.remove('hidden');document.getElementById('ctx-chips').classList.remove('hidden');
   const count=document.getElementById('ctx-count'),upd=()=>{count.textContent=box.value.length+' / 2000'};box.addEventListener('input',upd);upd();
   dictation(document.getElementById('dict-context'),box);
   document.querySelectorAll('#ctx-chips [data-add]').forEach(b=>b.onclick=()=>{const add=b.dataset.add;if(box.value.includes(add))return;box.value=(box.value.trim()?box.value.trim()+'\n':'')+add;box.value=box.value.slice(0,2000);upd();box.dispatchEvent(new Event('input'))});
-  document.getElementById('ctx-chips').insertAdjacentHTML('afterend',`<details id="ctx-assist" class="lib-box"><summary>✨ AI helper for the tutor context</summary>
+  document.getElementById('ctx-chips').insertAdjacentHTML('afterend',`<details id="ctx-assist" class="lib-box"><summary>✨ Helper for the tutor context</summary>
    <p class="hint-text">The helper reads your material and what you tell it, then drafts the context. Ask for changes ("shorter", "add that they struggle with vocabulary"), and use the draft when you like it. Please leave out student names.</p>
    <div id="ctx-log" class="chatlog" aria-live="polite" style="max-height:260px"></div>
    <textarea id="ctx-input" rows="2" placeholder="For example: My 9th graders are new to physics and get discouraged easily. Keep it encouraging, and do not let the tutor give away answers."></textarea>
    <div class="toolbar"><button type="button" id="dict-ctx-input" class="small">🎤 Dictate</button><button type="button" id="ctx-send" class="primary small">Ask the helper</button></div></details>`);
   const log=document.getElementById('ctx-log'),input=document.getElementById('ctx-input'),msgs=[],details=document.getElementById('ctx-assist');
-  const draw=()=>{log.innerHTML=msgs.map((m,i)=>`<div class="bubble ${m.role==='user'?'user':''}"><small>${m.role==='user'?'YOU':'AI HELPER'}</small>${esc(m.text)}${m.draft?`<pre class="ctx-draft">${esc(m.draft)}</pre><button type="button" class="small primary" data-use="${i}">Use this draft</button>`:''}</div>`).join('');log.scrollTop=log.scrollHeight;
+  const draw=()=>{log.innerHTML=msgs.map((m,i)=>`<div class="bubble ${m.role==='user'?'user':''}"><small>${m.role==='user'?'YOU':'HELPER'}</small>${esc(m.text)}${m.draft?`<pre class="ctx-draft">${esc(m.draft)}</pre><button type="button" class="small primary" data-use="${i}">Use this draft</button>`:''}</div>`).join('');log.scrollTop=log.scrollHeight;
    log.querySelectorAll('[data-use]').forEach(b=>b.onclick=()=>{const d=msgs[+b.dataset.use].draft;if(box.value.trim()&&box.value.trim()!==d&&!confirm('Replace what is in the context box with this draft?'))return;box.value=d;upd();box.dispatchEvent(new Event('input'));toast('Draft added. Edit it however you like.')})};
   dictation(document.getElementById('dict-ctx-input'),input);
   const ask=async(text)=>{const b=document.getElementById('ctx-send'),d=document.getElementById('ctx-draft');if(text)msgs.push({role:'user',text});input.value='';draw();b.disabled=d.disabled=true;

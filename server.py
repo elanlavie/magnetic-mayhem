@@ -83,7 +83,7 @@ def load():
 
 def ai(system,data,max_tokens=1800,wait=None):
     wait=wait or (95 if max_tokens>=8000 else 55)
-    if not KEY: raise GameError('The AI tutor is not configured. No scripted fallback is available.')
+    if not KEY: raise GameError('The tutor is not configured. No scripted fallback is available.')
     payload={'model':MODEL,'max_tokens':max_tokens,'system':system,'messages':[{'role':'user','content':json.dumps(data)}]}
     # Preserve short, responsive tutor replies: Sonnet 5.5 otherwise enables thinking by default.
     if MODEL == 'claude-sonnet-5-5':
@@ -96,7 +96,7 @@ def ai(system,data,max_tokens=1800,wait=None):
         text=re.sub(r'^```(?:json)?\s*|\s*```$','',text.strip())
         return json.loads(text)
     except Exception as exc:
-        raise GameError('The AI could not respond. Your attempt and progress were preserved. Please retry.') from exc
+        raise GameError('The tutor could not respond. Your attempt and progress were preserved. Please retry.') from exc
 
 def safe_url(u):
     u=str(u or '').strip()
@@ -281,7 +281,7 @@ def get(rq):
 
 def teacher(rq):
     if TEACHER_KEY and not secrets.compare_digest(TEACHER_KEY,str(rq.get('teacherKey',''))): raise GameError('Teacher access code is incorrect.')
-    if KEY and not TEACHER_KEY: raise GameError('Set TEACHER_KEY on the server before creating live-AI games.')
+    if KEY and not TEACHER_KEY: raise GameError('Set TEACHER_KEY on the server before creating live games.')
 
 def teacher_gate(d):
     if accounts.enabled():accounts.need_teacher(accounts.user_for(DB,d))
@@ -352,7 +352,7 @@ def dispatch(path,d):
         for th in threads: th.start()
         for th in threads: th.join(100)
         done=[x for x in results if x]
-        if not done: raise GameError('The AI took too long. Try again with fewer topics or shorter text.')
+        if not done: raise GameError('This took too long. Try again with fewer topics or shorter text.')
         return {'pack':validate_pack({'title':str(plan.get('title') or 'My game')[:100],'format':fmt,'topics':done}),'partial':len(done)<len(topics)}
     if path=='/api/assist':
         teacher_gate(d)
@@ -414,7 +414,7 @@ def dispatch(path,d):
         if d.get('tasksPerCrew'):
             try: pack['topics']=pack['topics'][:max(1,min(7,int(d['tasksPerCrew'])))]
             except (TypeError,ValueError): pass
-        if not KEY: raise GameError('The AI tutor is unavailable. Your teacher needs to configure the API key before play can start.')
+        if not KEY: raise GameError('The tutor is unavailable. Your teacher needs to configure the API key before play can start.')
         with LOCK:
             if len(ROOMS)>300: raise GameError('Server room limit reached.')
             code=''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6))

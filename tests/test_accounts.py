@@ -239,7 +239,7 @@ class ClassTests(unittest.TestCase):
     def test_chats_are_logged_for_the_teacher_even_when_the_tutor_fails(self):
         info = self.student_in_room()
         self.chat_with_tutor(info, 'Magnets attract because of domains')
-        def broken(system, data, max_tokens=650): raise game.GameError('The AI could not respond.')
+        def broken(system, data, max_tokens=650): raise game.GameError('The tutor could not respond.')
         with self.assertRaises(game.GameError): self.chat_with_tutor(info, 'my second try', ai=broken)
         convo = self.api('/api/class/transcript', self.teacher, classId=self.cls['id'], email='alexander.smith@wccschools.org')['conversations']
         roles = [(m['role'], m['text']) for c in convo for m in c['messages']]

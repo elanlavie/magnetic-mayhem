@@ -868,7 +868,7 @@ def library_import(db, user, text, title, ask):
         t.join(100)
     parts = [o for o in outs if o]
     if not parts and chunks:
-        raise AuthError('The AI took too long reading that file. Try a shorter file or paste part of it.')
+        raise AuthError('Reading that file took too long. Try a shorter file or paste part of it.')
     result = {'title': (parts[0] or {}).get('title') if parts else None}
     questions = [q for q in map(_clean_question, [x for o in parts for x in ((o or {}).get('questions') or [])]) if q][:60]
     if not questions:
