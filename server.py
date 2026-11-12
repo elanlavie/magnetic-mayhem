@@ -526,7 +526,7 @@ def dispatch(path,d):
             base=t['questions'][qi];vi=secrets.randbelow(len(base.get('variants') or [])+1);q=resolve_question(base,vi)
             p['active']={'id':secrets.token_hex(8),'topic':topic,'index':qi,'vi':vi,'prompt':q['prompt'],'choices':q.get('choices') or [],'mode':answer_mode(r['pack'],q),'image':q.get('image') or '','think':think_seconds(q,answer_mode(r['pack'],q)),'messages':[{'role':'assistant','text':q['prompt']}],'attempts':0,'repair':False,'done':False,'busy':False,'practice':practice}
             save(); return snapshot(r,p)
-        if path in ('/api/relay','/api/repair') and r.get('game'):raise GameError('In imposter mode, complete your assigned chatbot conversations to advance the crew task bar.')
+        if path in ('/api/relay','/api/repair') and r.get('game'):raise GameError('In imposter mode, complete your assigned tutor conversations to advance the crew task bar.')
         if path=='/api/relay':
             records=p.setdefault('relayRecords',{})
             if d.get('action')=='start':
