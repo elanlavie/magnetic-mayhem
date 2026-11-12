@@ -1,6 +1,6 @@
 # Production deployment
 
-- Game: https://magnetic-mayhem.onrender.com/
+- Game: https://imposter.elanlavie.net/ (also reachable at https://magnetic-mayhem.onrender.com/)
 - Source: https://github.com/elanlavie/magnetic-mayhem
 - Render service: https://dashboard.render.com/web/srv-dboo7mvf3r2c73bqn0gg
 - Server: Python, one instance in Oregon, `python server.py`.
@@ -32,7 +32,7 @@ Set `AUTH_MODE=classes` to require Google sign-in. Leave it unset (or `off`) for
 
 ### Google setup
 1. Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID → Web application.
-2. Add your site address (for example `https://magnetic-mayhem.onrender.com`) under Authorized JavaScript origins.
+2. Add your site address (for example `https://imposter.elanlavie.net`) under Authorized JavaScript origins.
 3. OAuth consent screen: set publishing status to **In production**. In "Testing" only listed test users can sign in, so students would be blocked.
 4. Put the client ID in `GOOGLE_CLIENT_ID`. If your district restricts third-party apps, ask IT to allow the client ID.
 
