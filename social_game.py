@@ -22,6 +22,7 @@ LOCK_COOLDOWN=90  # wait between one imposter's room locks
 MIN_SABOTAGE_PLAYERS=6
 STATIONS=[]       # station positions, set by the server
 RECORDER=None     # called once per finished round with a summary dict
+CREDITED=None     # called with (room, player): question ids that already earned homework credit, so new rounds ask the others
 PICKER=None       # called with the room when a round ends, to choose a best explanation
 
 def configure(room,options):
@@ -51,6 +52,15 @@ def park(player):
         player.setdefault('conversations',{})[str(player['active']['topic'])]=player['active']
         player['active']=None
 
+def _tasks(room,p):
+    """One question per topic. For homework, favour questions the student has not earned credit for yet."""
+    done=set(CREDITED(room,p) or ()) if CREDITED and not p.get('bot') else set()
+    out=[]
+    for i,t in enumerate(room['pack']['topics']):
+        pool=[j for j in range(len(t['questions'])) if f'{i}:{j}' not in done] or list(range(len(t['questions'])))
+        out.append(f'{i}:{secrets.choice(pool)}')
+    return out
+
 def start(room):
     g=room['game'];n=len(room['players']);g['impostorCount']=impostors_for(n);needed=MIN_PLAYERS
     if g['phase'] not in ('lobby','ended'):raise SocialError('Finish the current round before starting another.')
@@ -65,7 +75,7 @@ def start(room):
     for p in room['players'].values():
         park(p)
         p.update(role='impostor' if p['id'] in impostors else 'crew',alive=True,pendingTag=None,pendingNotice=None,
-                 roundTasks=[f'{i}:{secrets.randbelow(len(t["questions"]))}' for i,t in enumerate(room['pack']['topics'])],
+                 roundTasks=_tasks(room,p),
                  roundDone=[],killReadyAt=now+KILL_COOLDOWN,socialRound=g['round'],conversations={},x=800,y=460,botPath=[],botTarget=None,botWaitingUntil=0,botSuspect=None,
                  briefReady=False,tagCharge=0,shield=0,notices=[],botChargeAt=0,stats={'tags':0,'answers':0,'distance':0.0,'goodVotes':0,'votes':0,'items':0},safeUntil=0,blockedTopic=None,blockedUntil=0,sabCharge=0,sabReadyAt=0)
     return g

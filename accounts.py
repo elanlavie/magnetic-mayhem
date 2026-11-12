@@ -423,6 +423,12 @@ def screen(text):
     return None
 
 
+def mark_message(db, message_id, label):
+    """Label a message for the teacher (for example 'pasted') without opening a safety alert."""
+    with tx(db) as c:
+        c.execute('update messages set flag=? where id=? and flag is null', (label, message_id))
+
+
 def flag_message(db, class_id, message_id, email, name, category):
     """Mark a message and open an alert (unless the same student/category was alerted recently)."""
     if category not in CATEGORIES:
@@ -1068,13 +1074,14 @@ def hw_report(db, user, assignment_id):
         counts, adj = _hw_counts(c, row['id'])
         notes = {r['email']: r['note'] for r in c.execute('select email, note from hw_adjust where assignment_id=?', (row['id'],))}
         last = {r['email']: r['t'] for r in c.execute('select email, max(at) t from hw_credit where assignment_id=? group by email', (row['id'],))}
+        pasted = {r['email']: r['n'] for r in c.execute("select email, count(*) n from messages where class_id=? and flag='pasted' and ts>=? group by email", (row['class_id'], row['open_at'] or 0))}
         members_ = c.execute('select email,name from members where class_id=? and removed=0 order by lower(name)', (row['class_id'],)).fetchall()
     students = []
     for m in members_:
         n = max(0, min(total, counts.get(m['email'], 0) + adj.get(m['email'], 0)))
         students.append({'email': m['email'], 'name': m['name'], 'done': n, 'earned': counts.get(m['email'], 0), 'adjust': adj.get(m['email'], 0), 'note': notes.get(m['email'], ''),
-                         'percent': round(100 * n / total) if total else 0, 'last': last.get(m['email'])})
-    return {'id': row['id'], 'title': row['title'], 'total': total, 'due': row['due'], 'open': row['open_at'], 'students': students}
+                         'percent': round(100 * n / total) if total else 0, 'last': last.get(m['email']), 'pasted': pasted.get(m['email'], 0)})
+    return {'id': row['id'], 'classId': row['class_id'], 'title': row['title'], 'total': total, 'due': row['due'], 'open': row['open_at'], 'students': students}
 
 
 def hw_adjust(db, user, assignment_id, email, delta, note=''):
