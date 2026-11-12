@@ -44,6 +44,7 @@ const Classes=(()=>{
   if(!box){box=document.createElement('div');box.id='account';box.className='account';document.querySelector('.header-right').prepend(box)}
   box.innerHTML=user?`<span class="who" title="${esc(user.email)}">${esc(user.name)} · ${user.role}</span><button class="quiet" id="acct-classes">${user.role==='teacher'?'🏫 Classes':'🏫 My classes'}</button><button class="quiet" id="acct-out">Sign out</button>`:'';
   if(user){box.querySelector('#acct-classes').onclick=openClasses;box.querySelector('#acct-out').onclick=signOut}
+  if(user&&!box.querySelector('#acct-hw')){const h=document.createElement('button');h.className='quiet';h.id='acct-hw';h.textContent='📘 Homework';h.onclick=()=>window.Homework?.open();box.querySelector('#acct-classes').after(h)}
   if(user&&user.role==='teacher'&&!box.querySelector('#acct-balance')){const b=document.createElement('button');b.className='quiet';b.id='acct-balance';b.textContent='⚖️ Balance';b.onclick=balanceView;box.querySelector('#acct-classes').after(b)}
   const teacherCard=document.getElementById('teacher');if(teacherCard)teacherCard.classList.toggle('hidden',!!user&&user.role!=='teacher');
  }

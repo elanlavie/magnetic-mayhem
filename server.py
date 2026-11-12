@@ -329,18 +329,34 @@ def climb_floors(r):
     """The tower has one floor per question, up to a sensible height."""
     return min(CLIMB_CAP,sum(len(t['questions']) for t in r['pack']['topics']))
 
+def climb_done(r,p):
+    """Questions that no longer need asking: for homework, the ones that earned credit; otherwise everything finished this round."""
+    return accounts.hw_credited(DB,p['email'],r['assignmentId']) if r.get('assignmentId') and p.get('email') else set(p['completed'])
+
+def chat_pick(r,p):
+    """Homework chat: the next question without credit, preferring ones not yet tried this time. Returns (topic,index) or None when every question has credit."""
+    credited=accounts.hw_credited(DB,p['email'],r['assignmentId']) if p.get('email') else set()
+    todo=[(t,i) for t,topic in enumerate(r['pack']['topics']) for i in range(len(topic['questions'])) if f'{t}:{i}' not in credited]
+    fresh=[x for x in todo if f'{x[0]}:{x[1]}' not in p['completed']]
+    pick=(fresh or todo or [None])[0]
+    return pick
+
 def climb_pick(r,p,topic):
     """Use the gate's topic if it still has unanswered questions, otherwise any topic that does."""
-    topics=r['pack']['topics'];order=[topic]+[i for i in range(len(topics)) if i!=topic] if 0<=topic<len(topics) else list(range(len(topics)))
+    done=climb_done(r,p);topics=r['pack']['topics'];order=[topic]+[i for i in range(len(topics)) if i!=topic] if 0<=topic<len(topics) else list(range(len(topics)))
     for i in order:
-        if any(f'{i}:{j}' not in p['completed'] for j in range(len(topics[i]['questions']))):return i
+        if any(f'{i}:{j}' not in done for j in range(len(topics[i]['questions']))):return i
     return None
 
-def snapshot(r,p): return {'room':room_public(r),'player':{**private_player(p),**social.private(r,p)}}
+def hw_info(r,p):
+    total=sum(len(t['questions']) for t in r['pack']['topics']);done=len(accounts.hw_credited(DB,p['email'],r['assignmentId'])) if p.get('email') else 0
+    return {'title':r['pack'].get('title',''),'total':total,'done':min(total,done),'earned':bool(p.get('hwNew'))}
+
+def snapshot(r,p): return {'room':room_public(r),'player':{**private_player(p),**social.private(r,p),**({'hw':hw_info(r,p)} if r.get('assignmentId') else {})}}
 
 def dispatch(path,d):
     if path=='/api/config': return {'live':bool(KEY),'model':MODEL if KEY else None,'teacherProtected':bool(TEACHER_KEY),'builtin':None if accounts.enabled() else BUILTIN,'gameTypes':game_types.public(),**accounts.public_config()}
-    if path.startswith('/api/auth/') or path.startswith('/api/class/') or path.startswith('/api/library/') or path.startswith('/api/pack/') or path.startswith('/api/folder/') or path=='/api/balance':
+    if path.startswith('/api/auth/') or path.startswith('/api/class/') or path.startswith('/api/library/') or path.startswith('/api/pack/') or path.startswith('/api/folder/') or path=='/api/balance' or path.startswith('/api/hw/'):
         if not accounts.enabled():raise GameError('Classes are not enabled on this server.')
         if path=='/api/pack/save':
             if not isinstance(d.get('pack'),dict):raise GameError('Nothing to save yet.')
@@ -422,6 +438,11 @@ def dispatch(path,d):
             out.append({'sim':{'url':phet_url(slug),'title':'PhET: '+slug.replace('-',' ').title()} if slug else None,'imageIdeas':[str(v)[:200] for v in (x.get('imageIdeas') or [])][:3]})
         return {'topics':out}
     if path=='/api/create':
+        homework=None
+        if d.get('assignmentId'):
+            if not accounts.enabled():raise GameError('Homework needs classes to be enabled.')
+            homework=accounts.hw_for_play(DB,accounts.user_for(DB,d)['email'],d['assignmentId'])
+            d={**d,'mode':'solo','gameType':d.get('gameType') if d.get('gameType') in ('chat','climb') else 'chat','classId':homework['classId'],'pack':homework['pack'],'packId':None,'source':'','first':30,'followup':30,'unlimited':True}
         source=ROOMS.get(str(d.get('source','')).upper()) if d.get('mode') in ('solo','impostorSolo') else None
         if d.get('source') and (not source or source.get('closed') or not source.get('allowStudy',False)): raise GameError('Study code not found, closed, or solo study is disabled.')
         if source: d={**d,'gameType':source.get('gameType',game_types.DEFAULT),'pack':source['pack'],'live':source['ai'],'first':source['first'],'unlimited':source.get('unlimited',False),'followup':min(30,source['followup']),'autoNames':source.get('autoNames',False)}
@@ -441,7 +462,7 @@ def dispatch(path,d):
                 accounts.need_teacher(user)
                 if not accounts.is_owner(DB,user['email'],class_id):raise accounts.AuthError('Class not found.',404)
             owner=user['email']
-            if user['role']!='teacher' and not source and not saved_pack:raise GameError('Ask your teacher for a study code to practice on your own.')
+            if user['role']!='teacher' and not source and not saved_pack and not homework:raise GameError('Ask your teacher for a study code to practice on your own.')
             if not d.get('pack'):raise GameError('Add your questions before creating a game.')
         elif mode not in ('solo','impostorSolo'): teacher(d)
         if saved_pack and not source and not d.get('gameType'):
@@ -459,7 +480,7 @@ def dispatch(path,d):
             if len(ROOMS)>300: raise GameError('Server room limit reached.')
             code=''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6))
             host=secrets.token_urlsafe(24)
-            r={'code':code,'host':host,'classId':class_id,'owner':owner,'gameType':game_type,'mode':d.get('mode','coop'),'pack':pack,'players':{},'created':time.time(),'paused':False,'closed':False,'allowStudy':bool(d.get('allowStudy',True)),'autoNames':bool(d.get('autoNames',False)),'ai':True,'grade':clean_grade(d.get('grade') or (pack.get('grade') if isinstance(pack,dict) else None)),'first':max(10,min(180,int(d.get('first',30)))),'unlimited':bool(d.get('unlimited',False)),'followup':max(10,min(30,int(d.get('followup',30))))}
+            r={'code':code,'host':host,'classId':class_id,'owner':owner,'gameType':game_type,'assignmentId':homework['id'] if homework else None,'mode':d.get('mode','coop'),'pack':pack,'players':{},'created':time.time(),'paused':False,'closed':False,'allowStudy':bool(d.get('allowStudy',True)),'autoNames':bool(d.get('autoNames',False)),'ai':True,'grade':clean_grade(d.get('grade') or (pack.get('grade') if isinstance(pack,dict) else None)),'first':max(10,min(180,int(d.get('first',30)))),'unlimited':bool(d.get('unlimited',False)),'followup':max(10,min(30,int(d.get('followup',30))))}
             if mode in ('infiltration','impostorSolo'):
                 r['mode']='infiltration';r['botPractice']=mode=='impostorSolo';r['soloRole']=d.get('soloRole','random')
                 social.configure(r,{**d,**({'impostors':1,'writtenDiscussion':True} if r['botPractice'] else {})})
@@ -553,12 +574,16 @@ def dispatch(path,d):
             return {'ok':True,'x':p['x'],'y':p['y']}
         if path=='/api/start':
             if p['active']: return snapshot(r,p)
-            topic=int(d.get('topic',-1))
+            topic=int(d.get('topic',-1));forced=None
+            if r.get('gameType')=='chat':
+                pick=chat_pick(r,p)
+                if pick is None: raise GameError('All done! Every question in this assignment has credit.')
+                topic,forced=pick
             if not 0<=topic<len(r['pack']['topics']): raise GameError('Unknown station.')
             if r.get('gameType')=='climb':
                 topic=climb_pick(r,p,topic)
                 if topic is None: raise GameError('You reached the summit! Every question is done.')
-            elif math.dist([p['x'],p['y']],POSITIONS[topic])>125: raise GameError('Move closer to the station to interact.')
+            elif r.get('gameType')!='chat' and math.dist([p['x'],p['y']],POSITIONS[topic])>125: raise GameError('Move closer to the station to interact.')
             if r.get('game') and str(topic) in r['game'].get('locks',{}): raise GameError('This room is locked for a moment. Visit another room, or press Interact to unlock it if you are not in a chat.')
             if r.get('game') and p.get('blockedTopic')==topic and time.time()<p.get('blockedUntil',0): raise GameError('Visit a different station first, then come back.')
             if p.get('blockedTopic')!=topic: p['blockedTopic']=None
@@ -568,13 +593,14 @@ def dispatch(path,d):
             t=r['pack']['topics'][topic]
             qi=social.next_question(r,p,topic) if r.get('game') else None
             if r.get('gameType')=='climb':
-                left=[i for i in range(len(t['questions'])) if f'{topic}:{i}' not in p['completed']];qi=secrets.choice(left)
+                done=climb_done(r,p);left=[i for i in range(len(t['questions'])) if f'{topic}:{i}' not in done];qi=secrets.choice(left)
+            if forced is not None:qi=forced
             if qi is None:qi=None if any(x.startswith(f'{topic}:') for x in p['completed']) else secrets.randbelow(len(t['questions']))
             practice=qi is None
             if qi is None: qi=secrets.randbelow(len(t['questions']))
             base=t['questions'][qi];vi=secrets.randbelow(len(base.get('variants') or [])+1);q=resolve_question(base,vi)
             p['active']={'id':secrets.token_hex(8),'topic':topic,'index':qi,'vi':vi,'prompt':q['prompt'],'choices':q.get('choices') or [],'mode':answer_mode(r['pack'],q),'image':q.get('image') or '','think':think_seconds(q,answer_mode(r['pack'],q)),'messages':[{'role':'assistant','text':q['prompt']}],'attempts':0,'repair':False,'done':False,'busy':False,'practice':practice}
-            save(); return snapshot(r,p)
+            p['hwNew']=False;save(); return snapshot(r,p)
         if path in ('/api/relay','/api/repair') and r.get('game'):raise GameError('In imposter mode, complete your assigned tutor conversations to advance the crew task bar.')
         if path=='/api/relay':
             records=p.setdefault('relayRecords',{})
@@ -682,6 +708,8 @@ def dispatch(path,d):
                     social.conversation_completed(r,p,qid);social.record_task(r,p,qid)
                     if kind=='answer' and not local and not mcmiss and not a['repair'] and result.get('safety','none') in ('none','',None):social.note_explanation(r,p,a['topic'],q['prompt'],text.split('My reasoning: ',1)[-1])
                 a['done']=True
+                if r.get('assignmentId') and p.get('email') and kind=='answer' and not mcmiss and not a['repair'] and result.get('safety','none') in ('none','',None):
+                    p['hwNew']=qid not in accounts.hw_credited(DB,p['email'],r['assignmentId']);accounts.hw_credit(DB,p['email'],r['assignmentId'],qid)
                 if r.get('gameType')=='climb' and r['mode']=='race' and not r.get('winner') and len(p['completed'])>=climb_floors(r):r['winner']=p['team']
             a['messages'].append({'role':'assistant','text':result['feedback'][:3500]})
             p['cache'][rid]=True

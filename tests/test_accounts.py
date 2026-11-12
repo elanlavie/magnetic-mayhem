@@ -385,5 +385,50 @@ class ClassTests(unittest.TestCase):
         self.api('/api/pack/delete', self.teacher, id=saved['id'])
         self.assertEqual(self.api('/api/pack/list', self.teacher)['packs'], [])
 
+    # --- weekly homework
+    def test_homework_credit_only_for_good_explanations_and_teacher_counts(self):
+        pack = copy.deepcopy(game.BUILTIN); total = sum(len(x['questions']) for x in pack['topics'])
+        pid = self.api('/api/pack/save', self.teacher, pack=pack)['id']
+        hw = self.api('/api/hw/create', self.teacher, classId=self.cls['id'], packId=pid, title='Week 1', due=time.time() + 86400)
+        with self.assertRaises(accounts.AuthError): self.api('/api/hw/create', self.alex, classId=self.cls['id'], packId=pid)
+        mine = self.api('/api/hw/list', self.alex)['assignments']
+        self.assertEqual((mine[0]['title'], mine[0]['total'], mine[0]['done']), ('Week 1', total, 0))
+        # a student outside the class cannot start it
+        outsider = self.sign('zed.zed@wccschools.org', 'ZED ZED')
+        with self.assertRaises(accounts.AuthError): game.dispatch('/api/create', {'userToken': outsider, 'assignmentId': hw['id']})
+        made = game.dispatch('/api/create', {'userToken': self.alex, 'assignmentId': hw['id']})
+        joined = game.dispatch('/api/join', {'userToken': self.alex, 'code': made['code']})
+        auth = {'userToken': self.alex, 'code': made['code'], 'token': joined['token']}
+        self.assertEqual(game.ROOMS[made['code']]['gameType'], 'chat')
+        def answer(status, repair=False):
+            snap = game.dispatch('/api/start', auth); a = snap['player']['active']
+            if repair: game.get(auth)[1]['active']['repair'] = True
+            with patch.object(game, 'ai', side_effect=lambda *x, **k: {'status': status, 'feedback': 'ok', 'safety': 'none'}):
+                return game.dispatch('/api/chat', {**auth, 'challenge': a['id'], 'requestId': str(uuid.uuid4()), 'kind': 'answer', 'text': 'because of the field'})
+        done = lambda: game.dispatch('/api/hw/list', {'userToken': self.alex})['assignments'][0]['done']
+        answer('incorrect'); self.assertEqual(done(), 0)
+        game.get(auth)[1]['active'] = None
+        snap = answer('correct', repair=True); self.assertEqual(done(), 0)  # needed the worked answer: no credit
+        game.get(auth)[1]['active'] = None
+        snap = answer('correct'); self.assertEqual(done(), 1); self.assertEqual(snap['player']['hw']['done'], 1)
+        game.get(auth)[1]['active'] = None
+        rep = self.api('/api/hw/report', self.teacher, id=hw['id'])
+        self.assertEqual((rep['students'][0]['done'], rep['total']), (1, total))
+        self.api('/api/hw/adjust', self.teacher, id=hw['id'], email='alexander.smith@wccschools.org', delta=2, note='talked it through')
+        self.assertEqual(self.api('/api/hw/report', self.teacher, id=hw['id'])['students'][0]['done'], 3)
+        listing = self.api('/api/hw/list', self.teacher)['assignments'][0]
+        self.assertEqual((listing['students'], listing['total']), (1, total))
+        csv = self.api('/api/hw/export', self.teacher, classId=self.cls['id'])['csv']
+        self.assertIn('Week 1', csv); self.assertIn('ALEXANDER SMITH', csv)
+        with self.assertRaises(accounts.AuthError): self.api('/api/hw/report', self.alex, id=hw['id'])
+
+    def test_homework_not_open_yet_and_deleted(self):
+        pid = self.api('/api/pack/save', self.teacher, pack=copy.deepcopy(game.BUILTIN))['id']
+        hw = self.api('/api/hw/create', self.teacher, classId=self.cls['id'], packId=pid, openAt=time.time() + 86400)
+        self.assertEqual(self.api('/api/hw/list', self.alex)['assignments'], [])
+        with self.assertRaises(accounts.AuthError): game.dispatch('/api/create', {'userToken': self.alex, 'assignmentId': hw['id']})
+        self.api('/api/hw/delete', self.teacher, id=hw['id'])
+        self.assertEqual(self.api('/api/hw/list', self.teacher)['assignments'], [])
+
 
 if __name__ == '__main__': unittest.main()

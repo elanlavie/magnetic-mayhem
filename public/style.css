@@ -398,3 +398,15 @@ table.balance{width:100%;border-collapse:collapse;font-size:13px}table.balance t
 .viewport.climb .dpad .l{grid-column:1;grid-row:1}.viewport.climb .dpad .r{grid-column:2;grid-row:1}
 .viewport.climb .dpad button{width:68px!important;height:68px!important}
 .viewport.climb .dashbtn{width:92px!important;height:92px!important;font-size:34px}
+
+/* Homework */
+.hw-card{background:#ffffff0d;border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:10px 0}
+.hw-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;align-items:baseline}
+.hw-row{display:flex;align-items:center;gap:10px;margin:8px 0;flex-wrap:wrap}
+.hw-bar{flex:1 1 140px;max-width:320px;height:12px;border-radius:99px;background:#00000055;overflow:hidden;display:inline-block}
+.hw-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--mint),var(--purple));border-radius:99px}
+.hw-done{color:var(--mint);font-weight:700}
+.hw-student{grid-template-columns:minmax(150px,1.2fr) minmax(200px,1.6fr) 1fr auto}
+.hw-panel{max-width:640px;margin:18px auto}
+body.hw-chat #game .play-layout,body.hw-chat #game .game-chips,body.hw-chat #game .rooms-strip{display:none!important}
+@media(max-width:700px){.hw-student{grid-template-columns:1fr}}

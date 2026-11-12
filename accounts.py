@@ -61,6 +61,9 @@ create table if not exists folders (id text primary key, teacher text, name text
 create table if not exists rounds (id integer primary key autoincrement, at real, code text, winner text, how text, players integer, impostors integer, seconds integer, tags integer, meetings integer, ejected integer, done integer, total integer, target integer, practice integer, meeting_seconds integer, round_seconds integer);
 create table if not exists library (id text primary key, teacher text, title text, created real, questions text);
 create table if not exists alerts (id text primary key, class_id text, teacher text, student_email text, student_name text, category text, message_id integer, created real, status text, detail text, reviewed integer default 0);
+create table if not exists assignments (id text primary key, class_id text, teacher text, pack_id text, title text, open_at real, due real, created real, deleted integer default 0);
+create table if not exists hw_credit (assignment_id text, email text, qid text, at real, primary key (assignment_id, email, qid));
+create table if not exists hw_adjust (assignment_id text, email text, delta integer default 0, note text default '', primary key (assignment_id, email));
 create index if not exists messages_student on messages (class_id, email, id);
 '''
 
@@ -963,6 +966,187 @@ def balance(db, user):
             'recent': [{k: x[k] for k in ('at', 'players', 'impostors', 'winner', 'how', 'seconds', 'tags', 'meetings', 'done', 'target')} for x in rows[:15]]}
 
 
+# ---------------------------------------------------------------- weekly homework
+def _qids(pack_data):
+    """Every question of a pack, as the 'topic:index' ids the games use."""
+    return [f'{t}:{i}' for t, topic in enumerate(pack_data.get('topics') or []) for i in range(len(topic.get('questions') or []))]
+
+
+def _hw_row(c, assignment_id):
+    row = c.execute('select a.*, p.data as data from assignments a left join packs p on p.id=a.pack_id where a.id=? and a.deleted=0', (str(assignment_id),)).fetchone()
+    if not row:
+        raise AuthError('Assignment not found.', 404)
+    return row
+
+
+def _hw_total(row):
+    return len(_qids(json.loads(row['data'] or '{}')))
+
+
+def hw_create(db, user, class_id, pack_id, title, open_at, due):
+    need_teacher(user)
+    with tx(db) as c:
+        _owned(c, user, class_id)
+        pack = c.execute('select * from packs where id=? and teacher=?', (str(pack_id), user['email'])).fetchone()
+        if not pack:
+            raise AuthError('Pick one of your saved games for this assignment.', 404)
+        if not _qids(json.loads(pack['data'])):
+            raise AuthError('That game has no questions yet.')
+        now = time.time()
+        try:
+            open_at = float(open_at) if open_at else now
+            due = float(due) if due else None
+        except (TypeError, ValueError):
+            raise AuthError('Those dates did not look right.')
+        if due and due < open_at:
+            raise AuthError('The due date is before the open date.')
+        aid = secrets.token_hex(6)
+        c.execute('insert into assignments (id,class_id,teacher,pack_id,title,open_at,due,created) values (?,?,?,?,?,?,?,?)',
+                  (aid, str(class_id), user['email'], pack['id'], (str(title or '').strip() or pack['title'])[:120], open_at, due, now))
+    return {'id': aid}
+
+
+def hw_delete(db, user, assignment_id):
+    need_teacher(user)
+    with tx(db) as c:
+        row = _hw_row(c, assignment_id)
+        if row['teacher'] != user['email']:
+            raise AuthError('Assignment not found.', 404)
+        c.execute('update assignments set deleted=1 where id=?', (row['id'],))
+    return {'ok': True}
+
+
+def _hw_counts(c, assignment_id):
+    out = {}
+    for r in c.execute('select email, count(*) n from hw_credit where assignment_id=? group by email', (assignment_id,)):
+        out[r['email']] = r['n']
+    adj = {r['email']: r['delta'] for r in c.execute('select email, delta from hw_adjust where assignment_id=?', (assignment_id,))}
+    return out, adj
+
+
+def hw_list(db, user, class_id=None):
+    """Teacher: their assignments (optionally for one class) with class averages. Student: open assignments with their own progress."""
+    now = time.time()
+    with tx(db) as c:
+        if user['role'] == 'teacher':
+            q = 'select a.*, p.data as data, cl.name as class_name from assignments a left join packs p on p.id=a.pack_id join classes cl on cl.id=a.class_id where a.teacher=? and a.deleted=0 and cl.archived=0'
+            args = [user['email']]
+            if class_id:
+                q += ' and a.class_id=?'
+                args.append(str(class_id))
+            rows = c.execute(q + ' order by coalesce(a.due, 9e15), a.created desc', args).fetchall()
+            out = []
+            for r in rows:
+                total = _hw_total(r)
+                counts, adj = _hw_counts(c, r['id'])
+                students = [m['email'] for m in c.execute('select email from members where class_id=? and removed=0', (r['class_id'],))]
+                done = [max(0, min(total, counts.get(e, 0) + adj.get(e, 0))) for e in students]
+                out.append({'id': r['id'], 'classId': r['class_id'], 'className': r['class_name'], 'title': r['title'], 'total': total, 'open': r['open_at'], 'due': r['due'],
+                            'students': len(students), 'finished': sum(1 for n in done if total and n >= total),
+                            'avgPercent': round(100 * sum(done) / (total * len(students))) if total and students else 0})
+            return {'assignments': out}
+        rows = c.execute(
+            'select a.*, p.data as data, cl.name as class_name from assignments a left join packs p on p.id=a.pack_id join classes cl on cl.id=a.class_id '
+            'join members m on m.class_id=a.class_id and m.email=? and m.removed=0 where a.deleted=0 and cl.archived=0 and a.open_at<=? order by coalesce(a.due, 9e15), a.created desc', (user['email'], now)).fetchall()
+        out = []
+        for r in rows:
+            total = _hw_total(r)
+            counts, adj = _hw_counts(c, r['id'])
+            n = max(0, min(total, counts.get(user['email'], 0) + adj.get(user['email'], 0)))
+            out.append({'id': r['id'], 'classId': r['class_id'], 'className': r['class_name'], 'title': r['title'], 'total': total, 'done': n,
+                        'percent': round(100 * n / total) if total else 0, 'due': r['due']})
+        return {'assignments': out}
+
+
+def hw_report(db, user, assignment_id):
+    need_teacher(user)
+    with tx(db) as c:
+        row = _hw_row(c, assignment_id)
+        if row['teacher'] != user['email']:
+            raise AuthError('Assignment not found.', 404)
+        total = _hw_total(row)
+        counts, adj = _hw_counts(c, row['id'])
+        notes = {r['email']: r['note'] for r in c.execute('select email, note from hw_adjust where assignment_id=?', (row['id'],))}
+        last = {r['email']: r['t'] for r in c.execute('select email, max(at) t from hw_credit where assignment_id=? group by email', (row['id'],))}
+        members_ = c.execute('select email,name from members where class_id=? and removed=0 order by lower(name)', (row['class_id'],)).fetchall()
+    students = []
+    for m in members_:
+        n = max(0, min(total, counts.get(m['email'], 0) + adj.get(m['email'], 0)))
+        students.append({'email': m['email'], 'name': m['name'], 'done': n, 'earned': counts.get(m['email'], 0), 'adjust': adj.get(m['email'], 0), 'note': notes.get(m['email'], ''),
+                         'percent': round(100 * n / total) if total else 0, 'last': last.get(m['email'])})
+    return {'id': row['id'], 'title': row['title'], 'total': total, 'due': row['due'], 'open': row['open_at'], 'students': students}
+
+
+def hw_adjust(db, user, assignment_id, email, delta, note=''):
+    """The teacher can add or remove credited questions for one student (for example after talking with them)."""
+    need_teacher(user)
+    try:
+        delta = max(-100, min(100, int(delta)))
+    except (TypeError, ValueError):
+        raise AuthError('Enter a whole number.')
+    with tx(db) as c:
+        row = _hw_row(c, assignment_id)
+        if row['teacher'] != user['email']:
+            raise AuthError('Assignment not found.', 404)
+        if not c.execute('select 1 from members where class_id=? and email=?', (row['class_id'], str(email))).fetchone():
+            raise AuthError('Student not found.', 404)
+        c.execute('insert into hw_adjust (assignment_id,email,delta,note) values (?,?,?,?) on conflict(assignment_id,email) do update set delta=excluded.delta, note=excluded.note',
+                  (row['id'], str(email), delta, str(note or '')[:200]))
+    return {'ok': True}
+
+
+def hw_for_play(db, email, assignment_id):
+    """What a student needs to start homework: the class, the pack, and the questions already credited. Raises if it is not theirs or not open yet."""
+    with tx(db) as c:
+        row = _hw_row(c, assignment_id)
+        if not c.execute('select 1 from members where class_id=? and email=? and removed=0', (row['class_id'], email)).fetchone() and row['teacher'] != email:
+            raise AuthError('That assignment is not for your class.', 403)
+        if row['open_at'] and row['open_at'] > time.time() and row['teacher'] != email:
+            raise AuthError('That assignment has not opened yet.')
+    return {'id': row['id'], 'classId': row['class_id'], 'title': row['title'], 'pack': json.loads(row['data']), 'teacher': row['teacher']}
+
+
+def hw_credited(db, email, assignment_id):
+    with tx(db) as c:
+        return {r['qid'] for r in c.execute('select qid from hw_credit where assignment_id=? and email=?', (str(assignment_id), email))}
+
+
+def hw_credit(db, email, assignment_id, qid):
+    with tx(db) as c:
+        c.execute('insert or ignore into hw_credit (assignment_id,email,qid,at) values (?,?,?,?)', (str(assignment_id), email, str(qid), time.time()))
+        return c.execute('select count(*) n from hw_credit where assignment_id=? and email=?', (str(assignment_id), email)).fetchone()['n']
+
+
+def hw_export(db, user, class_id):
+    """The class gradebook as CSV text: one row per student, a completed count and percent for every assignment."""
+    need_teacher(user)
+    with tx(db) as c:
+        cl = _owned(c, user, class_id)
+        rows = c.execute('select a.*, p.data as data from assignments a left join packs p on p.id=a.pack_id where a.class_id=? and a.deleted=0 order by a.open_at, a.created', (cl['id'],)).fetchall()
+        students = c.execute('select email,name from members where class_id=? and removed=0 order by lower(name)', (cl['id'],)).fetchall()
+        data = []
+        for a in rows:
+            counts, adj = _hw_counts(c, a['id'])
+            data.append((a, _hw_total(a), counts, adj))
+
+    def cell(v):
+        v = str(v)
+        if v[:1] in '=+-@':
+            v = "'" + v
+        return '"' + v.replace('"', '""') + '"'
+    head = ['Student', 'Email']
+    for a, total, _, _ in data:
+        head += [f"{a['title']} (of {total})", f"{a['title']} %"]
+    lines = [','.join(cell(h) for h in head)]
+    for s in students:
+        row = [s['name'], s['email']]
+        for a, total, counts, adj in data:
+            n = max(0, min(total, counts.get(s['email'], 0) + adj.get(s['email'], 0)))
+            row += [n, round(100 * n / total) if total else 0]
+        lines.append(','.join(cell(v) for v in row))
+    return {'csv': '\n'.join(lines) + '\n', 'filename': re.sub(r'[^A-Za-z0-9]+', '-', cl['name']).strip('-') + '-homework.csv'}
+
+
 def dispatch(db, path, d, ask=None):
     if path == '/api/auth/google':
         return sign_in(db, str(d.get('credential', '')))
@@ -974,6 +1158,18 @@ def dispatch(db, path, d, ask=None):
         return {'user': user, 'classes': class_list(db, user)}
     if path == '/api/balance':
         return balance(db, user)
+    if path == '/api/hw/create':
+        return hw_create(db, user, d.get('classId'), d.get('packId'), d.get('title'), d.get('openAt'), d.get('due'))
+    if path == '/api/hw/delete':
+        return hw_delete(db, user, d.get('id'))
+    if path == '/api/hw/list':
+        return hw_list(db, user, d.get('classId'))
+    if path == '/api/hw/report':
+        return hw_report(db, user, d.get('id'))
+    if path == '/api/hw/adjust':
+        return hw_adjust(db, user, d.get('id'), d.get('email'), d.get('delta'), d.get('note'))
+    if path == '/api/hw/export':
+        return hw_export(db, user, d.get('classId'))
     if path == '/api/class/create':
         return class_create(db, user, d.get('name'), d.get('domains') or DEFAULT_STUDENT_DOMAINS)
     if path == '/api/class/list':
