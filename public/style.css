@@ -231,3 +231,81 @@ h1 em{background:linear-gradient(90deg,#ffb74d,#ff8a80 55%,#ce93d8);-webkit-back
 #lockin{grid-column:1/-1}.locked-choice{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--line,#644a46);background:#ffffff0d}.locked-choice small{opacity:.7;letter-spacing:.08em}.why-prompt{grid-column:1/-1;font-weight:700;margin:2px 0}
 
 .ctx-draft{white-space:pre-wrap;font:inherit;font-size:13px;margin:8px 0;padding:8px 10px;border-radius:8px;background:#ffffff0d;border:1px solid var(--line,#644a46)}
+/* Question screen v2: everything important fits on one screen. The conversation scrolls inside its own box; the answer choices and the send button never leave the screen. */
+#encounter{align-items:center;padding:8px}
+#encounter .encounter-card{height:min(calc(100dvh - 16px),820px);max-height:calc(100dvh - 16px);display:flex;flex-direction:column;min-height:0}
+#encounter .encounter-head{flex:0 0 auto;padding:12px 20px!important;align-items:center}
+#encounter .encounter-head>div:first-child{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+#encounter .encounter-head .eyebrow{width:100%;margin:0}
+#encounter .encounter-head h2{margin:0;font-size:22px}
+#encounter .encounter-head .countdown{display:flex;flex-direction:column;align-items:flex-end;min-width:80px}
+#encounter .encounter-head #timer{font-size:28px;line-height:1}
+#encounter .encounter-meta{flex:0 0 auto;padding-top:5px;padding-bottom:5px}
+#encounter .chatlog{flex:1 1 auto;min-height:60px!important;max-height:none!important;padding:12px 20px!important;gap:10px}
+#encounter .chatlog .qimg{max-height:min(120px,16dvh)!important;margin-bottom:6px!important}
+#encounter .answerbox{flex:0 0 auto;margin:8px 12px!important;padding:10px!important}
+#encounter .choices{margin:6px 0;grid-template-columns:1fr 1fr}
+#encounter .encounter-footer{flex:0 0 auto;padding:0 20px 8px}
+#encounter #timeup{flex:0 0 auto}
+@media(max-height:600px){#encounter .encounter-head{padding:8px 16px!important}#encounter .encounter-head h2{font-size:18px}#encounter .encounter-meta{display:none}#encounter .chatlog .qimg{max-height:60px!important}#encounter .choice{padding:6px 10px}}
+@media(max-width:600px){#encounter .choices{grid-template-columns:1fr}}
+/* Game screen v2: the live information sits in a column on the right, the map is as large as the screen allows, and the rooms you have visited sit under the map. */
+#game .play-layout{grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start}
+#game .play-main{min-width:0}
+#game .viewport{height:min(calc(100dvh - 230px),720px);min-height:280px}
+#game .mission-side{padding:0;position:sticky;top:8px;max-height:calc(100dvh - 16px);overflow-y:auto;scrollbar-width:thin}
+#game .mission-side .social-panel{margin:0 0 12px;padding:12px 14px}
+#game .mission-side .role-row{gap:6px 8px}
+#game .mission-side .crew-taskbar{flex-wrap:wrap}
+#game .mission-side .crew-taskbar>div{min-width:0;width:100%}
+#game.social-on .mission-side .eyebrow,#game.social-on .mission-side>h2,#game.social-on .nova-card,#game.social-on .boost-meter{display:none}
+#game .rooms-strip{margin-top:10px}
+#game .rooms-strip h3{margin:0 0 6px;font:700 12px 'Nunito',sans-serif;letter-spacing:.5px;color:var(--muted)}
+#game #station-list{display:flex;flex-wrap:wrap;gap:8px}
+#game #station-list .station-entry{padding:6px 12px 6px 10px;border:1px solid var(--line);border-radius:10px;background:#ffffff08;font-size:12px}
+#game #station-list .station-entry small{margin-left:6px}
+#game .game-bar{margin-bottom:10px}
+@media(max-width:850px){#game .play-layout{display:flex;flex-direction:column}#game .mission-side{display:block!important;position:static;max-height:none;overflow:visible;order:-1}#game .mission-side>:not(#social-panel){display:none!important}#game .viewport{height:min(60dvh,520px)}}
+body.in-game header{height:48px}body.in-game .brand-light,body.in-game .brand span+span{display:none}body.in-game .brand-icon{transform:scale(.6);margin:-10px}
+body.in-game #game{padding-top:8px;padding-bottom:8px}
+#game .game-bar{margin-bottom:6px}#game .game-bar h2{margin:0;font-size:18px}
+#game .mission-side .cell-row{margin:6px 0;padding:6px 10px;font-size:12px;gap:4px 10px}
+#game .mission-side .cells-big{font-size:14px}
+#game .mission-side .crew-taskbar{margin:8px 0;padding:10px 12px;gap:8px}
+#game .mission-side .crew-big{font-size:19px}
+#game .mission-side .crew-sub{font-size:11px}
+#game .mission-side .crew-taskbar>div{height:12px!important}
+#game .mission-side .crew-taskbar>span.chip-big,#game .mission-side .shield-badge{font-size:15px;padding:5px 12px}
+#game .mission-side .status-row{margin-top:6px;font-size:12px}
+#game .mission-side .role-row{font-size:12px}
+#game .mission-side .private-role{font-size:10px}
+#game .mission-side .next-objective{padding:10px;margin-bottom:8px;font-size:12px}
+#game .mission-side .progress-track{margin:8px 0 4px}
+#game .viewport{height:min(calc(100dvh - 190px),740px)}
+#game #station-list .station-entry{padding:3px 10px 3px 6px!important;gap:6px;font-size:11px;border-left-width:3px}
+#game #station-list .station-entry .indicator{width:20px;height:20px;font-size:11px;border-radius:6px}
+#game .rooms-strip{margin-top:6px}#game .rooms-strip h3{margin:0 0 4px;font-size:11px}
+#game #station-list{gap:5px}
+#game .viewport{height:min(calc(100dvh - 205px),740px)}
+#game .mission-side{max-height:calc(100dvh - 108px)}
+#game #station-list .station-entry{border:2px solid var(--rc,#77584e)!important;border-radius:11px!important;padding:2px 10px 2px 3px!important;margin:0!important;gap:7px;font-size:12px!important;background:color-mix(in srgb,var(--rc,#77584e) 30%,#3c2923)!important}
+#game #station-list .station-entry.complete{background:color-mix(in srgb,var(--rc,#77584e) 12%,#3c2923)!important}
+#game #station-list .station-entry .indicator{width:22px!important;height:22px!important;font-size:12px!important;box-shadow:0 0 0 1px #fff!important}
+#game .viewport{height:min(calc(100dvh - 182px),740px)}
+@media(max-width:850px){#game .viewport{height:min(60dvh,520px)}}
+#game .mission-side .crew-taskbar>div{flex:1 1 100%;order:-1}
+#game .mission-side .crew-taskbar>span:first-child{order:-2;flex:1 1 100%}
+.timeup-count{width:clamp(90px,18vw,140px);height:clamp(90px,18vw,140px);margin:0 auto 14px;border-radius:50%;border:6px solid #ffd0d0;display:grid;place-items:center;font:700 clamp(54px,11vw,88px)/1 'Fredoka',sans-serif;color:#fff;background:#00000033;font-variant-numeric:tabular-nums}
+.timeup-count.tick{animation:tucount .9s ease-out}
+@keyframes tucount{0%{transform:scale(1.25);opacity:.4}100%{transform:scale(1);opacity:1}}
+@media(prefers-reduced-motion:reduce){.timeup-count.tick{animation:none}}
+.timeup-box h2{margin-bottom:8px!important}
+.timeup-clock{font-size:clamp(50px,10vw,90px)!important}
+.timeup-main{margin-bottom:8px!important}.timeup-sub{margin-bottom:14px!important}
+.timeup-overlay{overflow-y:auto}
+.timeup-clock{font-size:clamp(34px,9dvh,90px)!important}
+.timeup-box h2{font-size:clamp(30px,8dvh,80px)!important;margin:4px 0 6px!important}
+.timeup-main{font-size:clamp(17px,3.6dvh,30px)!important}
+.timeup-sub{font-size:clamp(14px,2.8dvh,22px)!important}
+.timeup-count{width:clamp(70px,16dvh,130px);height:clamp(70px,16dvh,130px);font-size:clamp(42px,10dvh,80px);margin-bottom:8px}
+.timeup-box button{font-size:clamp(17px,3.4dvh,26px)!important;padding:12px 28px!important}
