@@ -341,3 +341,60 @@ table.balance{width:100%;border-collapse:collapse;font-size:13px}table.balance t
 .viewport.climb .interact{top:48px;bottom:auto;left:50%;transform:translateX(-50%);padding:6px 10px;gap:8px}
 .viewport.climb .interact .primary{padding:6px 14px;font-size:14px}
 @media(pointer:coarse){.viewport.climb .interact{top:48px;right:auto;left:50%;transform:translateX(-50%);flex-direction:row}}
+
+/* Phone pass: map first with a status strip, compact question screen, tower touch buttons */
+#mini-hud{position:absolute;left:8px;top:38px;display:none;gap:5px;flex-wrap:wrap;max-width:calc(100% - 60px);z-index:4;pointer-events:none}
+#mini-hud span{background:#2a1a16e0;border:1px solid #ffffff33;border-radius:999px;padding:2px 9px;font:700 12px 'Fredoka',sans-serif;white-space:nowrap}
+#mini-hud .warn{border-color:#ff8a7a;color:#ffd1c9}
+@media(max-width:850px){
+ #mini-hud{display:flex}
+ #game .mission-side{order:1}
+ #game .viewport{height:clamp(340px,calc(100dvh - 142px),640px)}
+ #game .map-top{display:none}
+ #mini-hud{top:8px}
+ #boost-hud{top:auto!important;bottom:14px!important;left:50%!important;right:auto!important;transform:translateX(-50%) scale(.8)}
+ #game .game-bar{gap:6px}
+ #game .game-chips{gap:6px}
+ #game .game-chips button,#game .game-chips span{padding:5px 10px;font-size:12px}
+}
+@media(max-width:600px){
+ #encounter{padding:0}
+ #encounter .encounter-card{height:100dvh;max-height:100dvh;border-radius:0;border-left:0;border-right:0}
+ #encounter .encounter-head{padding:6px 10px!important;gap:6px}
+ #encounter .encounter-head h2,#encounter .encounter-meta,#encounter .encounter-footer{display:none}
+ #encounter .encounter-head>div:first-child{flex-wrap:nowrap;gap:8px}
+ #encounter .encounter-head .eyebrow{width:auto;font-size:10px;max-width:38vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ #encounter .encounter-head .countdown{flex-direction:row;align-items:center;gap:8px;min-width:0}
+ #encounter .encounter-head #timer{font-size:22px}
+ #encounter .encounter-head #timer-label,#enc-cells small{display:none}
+ #enc-cells{padding:3px 8px!important;font-size:13px}
+ #closechat{font-size:12px;padding:5px 9px}
+ #encounter .chatlog{padding:8px 12px!important;min-height:100px!important}
+ #encounter .answerbox{margin:4px 6px!important;padding:8px!important}
+ #encounter .choices{gap:4px;margin:4px 0}
+ #encounter .choice{padding:5px 9px;font-size:13px}
+ #encounter .starters{gap:6px;margin:4px 0}#encounter .starters button{font-size:12px;padding:4px 8px}
+ #encounter .answer-head{margin-bottom:2px;font-size:11px}
+}
+@media(orientation:landscape) and (max-height:520px){
+ #encounter{padding:0}
+ #encounter .encounter-card{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto minmax(0,1fr) auto;height:100dvh;max-height:100dvh;border-radius:0}
+ #encounter .encounter-head{grid-column:1/-1;padding:4px 12px!important}
+ #encounter .encounter-head h2,#encounter .encounter-meta,#encounter .encounter-footer{display:none}
+ #encounter .encounter-head>div:first-child{flex-wrap:nowrap}
+ #encounter .encounter-head .eyebrow{width:auto}
+ #encounter .encounter-head .countdown{flex-direction:row;align-items:center;gap:10px}
+ #encounter .encounter-head #timer{font-size:20px}
+ #encounter .encounter-head #timer-label,#enc-cells small{display:none}
+ #encounter .chatlog{grid-column:1;grid-row:2;overflow:auto;min-height:0!important}
+ #encounter .answerbox{grid-column:2;grid-row:2;overflow:auto;margin:4px!important;min-height:0}
+ #encounter .choices{grid-template-columns:1fr;gap:4px}
+ #encounter .choice{padding:4px 8px;font-size:12px}
+ #encounter #timeup{grid-column:1/-1;grid-row:3}
+}
+/* Tower: left/right on the left thumb, one big jump button on the right */
+.viewport.climb .dpad .u,.viewport.climb .dpad .d{display:none}
+.viewport.climb .dpad{grid-template-columns:repeat(2,68px)!important;grid-template-rows:68px!important}
+.viewport.climb .dpad .l{grid-column:1;grid-row:1}.viewport.climb .dpad .r{grid-column:2;grid-row:1}
+.viewport.climb .dpad button{width:68px!important;height:68px!important}
+.viewport.climb .dashbtn{width:92px!important;height:92px!important;font-size:34px}
