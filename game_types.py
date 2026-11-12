@@ -1,7 +1,7 @@
 """Registry of game types.
 
 A game type is a complete way to play: it decides which room modes exist and
-how a round feels. Every type uses the same chatbot tutor, so students always
+how a round feels. Every type uses the same tutor, so students always
 earn progress by explaining their reasoning. Add a new type by adding an entry
 here, then wiring its rules into the server.
 """
@@ -13,7 +13,7 @@ GAME_TYPES={
                'summary':'Among Us-style imposter missions, cooperative rescue, or a two-team race. Every task is a chat with the ship engineer.',
                'available':True,'modes':('solo','coop','race','infiltration','impostorSolo')},
     'climb':{'name':'Tower climb','icon':'🧗',
-             'summary':'Gimkit-style obstacle course: climb higher by explaining your reasoning to the chatbot.',
+             'summary':'Gimkit-style obstacle course: climb higher by explaining your reasoning to the tutor.',
              'available':False,'modes':()},
 }
 

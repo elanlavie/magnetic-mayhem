@@ -222,7 +222,7 @@ const Classes=(()=>{
   document.getElementById('upload').closest('.toolbar').insertAdjacentHTML('afterbegin','<button type="button" id="dict-topics" class="small" title="Speak your content. Chrome sends dictation audio to Google for transcription.">🎤 Dictate</button>');
   dictation(document.getElementById('dict-topics'),topics);
   document.getElementById('step-answer').insertAdjacentHTML('beforebegin',`<details id="assist-box" class="lib-box"><summary>💬 Not sure what to cover? Talk it through with the helper <span class="muted">(optional)</span></summary>
-   <p class="hint-text">Describe what you are teaching. The helper asks questions and suggests topics, simulations and images. Whatever you discuss here is used automatically when you click Generate questions.</p>
+   <p class="hint-text">Describe what you are teaching. The helper asks questions and suggests topics, simulations and images. Whatever you discuss here is used automatically when you click Create questions.</p>
    <div id="assist-log" class="chatlog" aria-live="polite" style="max-height:260px"></div>
    <textarea id="assist-input" rows="2" placeholder="For example: I teach ecosystems to 9th graders. We covered food chains and energy flow, and I want them to explain why the loss of one species ripples through the web."></textarea>
    <div class="toolbar"><button type="button" id="dict-assist" class="small">🎤 Dictate</button><button type="button" id="assist-send" class="primary small">Ask the helper</button></div></details>`);
